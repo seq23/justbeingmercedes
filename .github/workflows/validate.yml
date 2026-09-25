@@ -15,6 +15,8 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npx playwright install --with-deps chromium
       - run: npm run screenshots
+      - name: Upload backend end-to-end (wrangler pages dev + local R2)
+        run: npm test
       - uses: actions/upload-artifact@v4
         if: always()
         with:
