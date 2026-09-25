@@ -6,6 +6,7 @@ import { readFile, readdir, stat, mkdir } from "node:fs/promises";
 import { extname, join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
+import { SLOTS } from "../functions/_lib/slots.js";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const PUBLIC = join(ROOT, "public");
@@ -60,8 +61,40 @@ for (const f of images) {
 }
 
 // 2. Serve public/ exactly as Pages will (root-relative paths) and read the page in Chromium.
+// 1c. The upload backend: the Pages Functions exist and export their handlers, and every slot is wired.
+check(Object.keys(SLOTS).length >= 1 + MIN_GALLERY, `functions/_lib/slots.js lists ${Object.keys(SLOTS).length} slots (need hero + ${MIN_GALLERY})`);
+check(!!SLOTS.hero, "no hero slot in functions/_lib/slots.js");
+{
+  const photosFn = await import("../functions/photos/[slot].js").catch((e) => ({ err: e }));
+  check(typeof photosFn.onRequest === "function", `functions/photos/[slot].js must export onRequest (GET/HEAD /photos/:slot)${photosFn.err ? ": " + photosFn.err.message : ""}`);
+  const uploadFn = await import("../functions/upload.js").catch((e) => ({ err: e }));
+  check(typeof uploadFn.onRequestPost === "function", `functions/upload.js must export onRequestPost${uploadFn.err ? ": " + uploadFn.err.message : ""}`);
+  check(typeof uploadFn.onRequestDelete === "function", "functions/upload.js must export onRequestDelete");
+  const indexHtml = await readFile(join(PUBLIC, "index.html"), "utf8");
+  const uploadHtml = await readFile(join(PUBLIC, "upload.html"), "utf8").catch(() => "");
+  check(uploadHtml.length > 0, "public/upload.html is missing");
+  for (const [slot, s] of Object.entries(SLOTS)) {
+    check(indexHtml.includes(`src="/photos/${slot}"`), `index.html never shows /photos/${slot} (full size)`);
+    if (slot !== "hero") check(indexHtml.includes(`src="/photos/${slot}?size=thumb"`), `index.html has no tile for /photos/${slot}?size=thumb`);
+    check(uploadHtml.includes(`data-slot="${slot}"`) && uploadHtml.includes(`/photos/${slot}`), `upload.html has no card for slot ${slot}`);
+    for (const u of [s.full, s.thumb]) {
+      const size = await stat(join(PUBLIC, u)).then((st) => st.size).catch(() => -1);
+      check(size > 0 && size <= MAX_IMAGE_BYTES, `slot ${slot} fallback ${u} is ${size < 0 ? "missing" : Math.round(size / 1024) + " KB"} (max 400 KB)`);
+    }
+  }
+}
+
 const server = createServer(async (req, res) => {
-  const path = decodeURIComponent(new URL(req.url, "http://x").pathname);
+  const url = new URL(req.url, "http://x");
+  const path = decodeURIComponent(url.pathname);
+  // Emulate functions/photos/[slot].js with no uploads: 302 to the static fallback.
+  const m = path.match(/^\/photos\/([\w-]+)$/);
+  if (m) {
+    const s = SLOTS[m[1]];
+    if (!s) { res.writeHead(404).end("no such photo"); return; }
+    res.writeHead(302, { location: url.searchParams.get("size") === "thumb" ? s.thumb : s.full }).end();
+    return;
+  }
   const file = join(PUBLIC, path.endsWith("/") ? path + "index.html" : path);
   if (!file.startsWith(PUBLIC)) { res.writeHead(403).end(); return; }
   try {
@@ -152,20 +185,26 @@ try {
       check(d.favicon, "no favicon link");
       check(d.scripts.length === 0, `no scripts allowed (external or inline): ${d.scripts.join(", ")}`);
       for (const u of new Set(d.localSrcs)) {
+        if (u.startsWith("/photos/")) {
+          check(!!SLOTS[u.slice(8).split("?")[0]], `image ${u} names a photo slot that does not exist`);
+          continue;
+        }
         const f = join(PUBLIC, u);
         const ok = await stat(f).then((st) => st.isFile()).catch(() => false);
         check(ok, `image ${u} is referenced but missing from public/`);
       }
 
-      // Gallery: 6-8 small photos, each opening its own full-size lightbox.
+      // Gallery: 5-8 small photos, each opening its own full-size lightbox.
       check(d.tiles.length >= MIN_GALLERY, `gallery has ${d.tiles.length} small photos (min ${MIN_GALLERY})`);
       check(d.tiles.length <= MAX_GALLERY, `gallery has ${d.tiles.length} small photos (max ${MAX_GALLERY})`);
       for (const t of d.tiles) {
         check(/^#photo-[\w-]+$/.test(t.href || "") && t.hasLb, `tile ${t.href} has no matching .lb lightbox target`);
         check(t.hasClose, `lightbox ${t.id} has no close link`);
         check(t.fullAlt.length > 0, `lightbox ${t.id} image has no alt text`);
-        check(!!t.full && t.full !== t.thumb && !/-thumb\./.test(t.full), `lightbox ${t.id} shows the thumbnail, not the full-size photo`);
-        for (const u of [t.full, t.fullWebp].filter(Boolean)) {
+        check(!!t.full && t.full !== t.thumb && !/-thumb\.|size=thumb/.test(t.full), `lightbox ${t.id} shows the thumbnail, not the full-size photo`);
+        const slotOf = (u) => SLOTS[(u || "").match(/^\/photos\/([\w-]+)/)?.[1]];
+        check(!!slotOf(t.full) && !!slotOf(t.thumb), `tile ${t.id} does not load through /photos/<slot> (uploads would never show)`);
+        for (const u of [slotOf(t.full)?.full, t.fullWebp].filter(Boolean)) {
           const size = await stat(join(PUBLIC, u)).then((st) => st.size).catch(() => -1);
           check(size > 0 && size <= MAX_IMAGE_BYTES, `full-size ${u} is ${size < 0 ? "missing" : Math.round(size / 1024) + " KB"} (max 400 KB)`);
         }

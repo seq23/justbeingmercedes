@@ -9,6 +9,11 @@ One screen, a big photo, her name, a short bio, a row of small photos that open 
 - Every push to `main` runs two GitHub Actions: **Validate** (checks the page) and **Deploy** (publishes `public/`).
 - To publish by hand from a Mac with wrangler logged in: `npm run deploy`.
 
+## Mercedes can change the photos herself
+Go to **https://justbeingmercedes.com/upload**. Each photo on the site has a card: choose a photo, tap Upload, and it shows on the site within about five minutes. "Back to original" puts the first photo back. No password: **anyone with that link can change the photos, by the owner's choice** (25 Sep 2026). It only accepts changes sent from that page, and at most 30 changes an hour from one connection.
+
+Uploaded photos live in the Cloudflare R2 bucket `justbeingmercedes-photos` (one file per spot: `hero`, `photo-1` … `photo-5`). The page asks `/photos/<spot>` for each picture: an upload wins, otherwise it falls back to the original in `public/assets/`.
+
 ## Changing things (plain English)
 - **The bio**: open `public/index.html`, find the paragraph that starts `<p class="bio">`, change the words between the tags. Keep it to about 60 to 120 words so it still fits one screen. Only write things Mercedes has said publicly.
 - **The big photo**: replace `photos-src/selfie.png`, then run `python3 scripts/build-images.py`.

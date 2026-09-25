@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Change Your Photos</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@1,6..96,400&family=Jost:wght@400;500&display=swap">
+<link rel="stylesheet" href="/styles.css">
+<style>
+  html, body { height: auto; }
+  .up { max-width: 60rem; margin: 0 auto; padding: clamp(1.5rem, 5vw, 3rem) 16px 4rem; display: flex; flex-direction: column; gap: 1.5rem; }
+  .up header { display: flex; flex-direction: column; gap: .5rem; }
+  .up h1 { margin: 0; font: italic 400 clamp(2.4rem, 7vw, 4rem)/1 var(--display); color: var(--gold); }
+  .up .lede { margin: 0; max-width: 38em; color: var(--muted); }
+  .up .lede a { color: var(--denim); }
+  .cards { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr)); gap: 1rem; }
+  .card { display: flex; gap: .9rem; padding: .9rem; background: var(--frame); border-radius: 6px; box-shadow: 0 8px 20px -16px rgba(36, 22, 15, .5); }
+  .card > img { flex: none; align-self: flex-start; width: 6.5rem; aspect-ratio: 4 / 5; height: auto; object-fit: cover; object-position: 50% 25%; background: var(--ground-2); }
+  .card-body { display: flex; flex-direction: column; gap: .45rem; min-width: 0; flex: 1; }
+  .card h2 { margin: 0; font: 500 .78rem/1.2 var(--sans); letter-spacing: .16em; text-transform: uppercase; color: var(--denim); }
+  .card .caption { margin: 0; font: italic .95rem/1.3 var(--display); color: var(--muted); }
+  .pick { position: relative; display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: .4rem .9rem; border: 1px dashed var(--gold-soft); border-radius: 6px; font-size: .9rem; cursor: pointer; }
+  .pick input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  .pick:focus-within { outline: 2px solid var(--gold); outline-offset: 2px; }
+  .actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+  .actions button { min-height: 44px; padding: .4rem 1rem; border-radius: 999px; font: 500 .82rem/1 var(--sans); letter-spacing: .06em; cursor: pointer; }
+  .upload { background: var(--ink); color: var(--ground); border: 1px solid var(--ink); }
+  .reset { background: transparent; color: var(--ink); border: 1px solid var(--gold-soft); }
+  .actions button:disabled { opacity: .45; cursor: not-allowed; }
+  .actions button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+  .status { margin: 0; min-height: 1.3em; font-size: .88rem; color: var(--muted); }
+  .status.ok { color: var(--denim); }
+  .status.err { color: #a3321f; }
+  :root[data-theme="dark"] .status.err { color: #f08a74; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .status.err { color: #f08a74; } }
+</style>
+</head>
+<body>
+<main class="up">
+  <header>
+    <h1>Change your photos</h1>
+    <p class="lede">Pick a photo for any spot, then tap Upload. It shows on <a href="/">justbeingmercedes.com</a> within a few minutes. "Back to original" puts the first photo back. Photos are shrunk on your phone before they are sent, so large ones are fine.</p>
+  </header>
+  <ul class="cards">
+    <!-- gallery:upload -->
+    <li class="card" data-slot="hero">
+      <img src="/photos/hero?size=thumb" alt="Current big photo: The large photo beside your name" width="360" height="450">
+      <div class="card-body">
+        <h2>Big photo</h2>
+        <p class="caption">The large photo beside your name</p>
+        <label class="pick">Choose a photo<input type="file" name="file" accept="image/jpeg,image/png,image/webp,image/heic,.heic"></label>
+        <div class="actions"><button type="button" class="upload" disabled>Upload</button><button type="button" class="reset">Back to original</button></div>
+        <p class="status" role="status" aria-live="polite"></p>
+      </div>
+    </li>
+    <li class="card" data-slot="photo-1">
+      <img src="/photos/photo-1?size=thumb" alt="Current small photo 1: Gold hoops, printed blouse" width="360" height="450">
+      <div class="card-body">
+        <h2>Small photo 1</h2>
+        <p class="caption">Gold hoops, printed blouse</p>
+        <label class="pick">Choose a photo<input type="file" name="file" accept="image/jpeg,image/png,image/webp,image/heic,.heic"></label>
+        <div class="actions"><button type="button" class="upload" disabled>Upload</button><button type="button" class="reset">Back to original</button></div>
+        <p class="status" role="status" aria-live="polite"></p>
+      </div>
+    </li>
+    <li class="card" data-slot="photo-2">
+      <img src="/photos/photo-2?size=thumb" alt="Current small photo 2: Summer, straw hat" width="360" height="450">
+      <div class="card-body">
+        <h2>Small photo 2</h2>
+        <p class="caption">Summer, straw hat</p>
+        <label class="pick">Choose a photo<input type="file" name="file" accept="image/jpeg,image/png,image/webp,image/heic,.heic"></label>
+        <div class="actions"><button type="button" class="upload" disabled>Upload</button><button type="button" class="reset">Back to original</button></div>
+        <p class="status" role="status" aria-live="polite"></p>
+      </div>
+    </li>
+    <li class="card" data-slot="photo-3">
+      <img src="/photos/photo-3?size=thumb" alt="Current small photo 3: Garden lights, evening" width="360" height="450">
+      <div class="card-body">
+        <h2>Small photo 3</h2>
+        <p class="caption">Garden lights, evening</p>
+        <label class="pick">Choose a photo<input type="file" name="file" accept="image/jpeg,image/png,image/webp,image/heic,.heic"></label>
+        <div class="actions"><button type="button" class="upload" disabled>Upload</button><button type="button" class="reset">Back to original</button></div>
+        <p class="status" role="status" aria-live="polite"></p>
+      </div>
+    </li>
+    <li class="card" data-slot="photo-4">
+      <img src="/photos/photo-4?size=thumb" alt="Current small photo 4: Brownstone block" width="360" height="450">
+      <div class="card-body">
+        <h2>Small photo 4</h2>
+        <p class="caption">Brownstone block</p>
+        <label class="pick">Choose a photo<input type="file" name="file" accept="image/jpeg,image/png,image/webp,image/heic,.heic"></label>
+        <div class="actions"><button type="button" class="upload" disabled>Upload</button><button type="button" class="reset">Back to original</button></div>
+        <p class="status" role="status" aria-live="polite"></p>
+      </div>
+    </li>
+    <li class="card" data-slot="photo-5">
+      <img src="/photos/photo-5?size=thumb" alt="Current small photo 5: Stripes by the church" width="360" height="450">
+      <div class="card-body">
+        <h2>Small photo 5</h2>
+        <p class="caption">Stripes by the church</p>
+        <label class="pick">Choose a photo<input type="file" name="file" accept="image/jpeg,image/png,image/webp,image/heic,.heic"></label>
+        <div class="actions"><button type="button" class="upload" disabled>Upload</button><button type="button" class="reset">Back to original</button></div>
+        <p class="status" role="status" aria-live="polite"></p>
+      </div>
+    </li>
+    <!-- /gallery:upload -->
+  </ul>
+</main>
+<script>
+(() => {
+  const MAX_SIDE = 2000;
+  const say = (card, text, kind) => { const s = card.querySelector(".status"); s.textContent = text; s.className = "status" + (kind ? " " + kind : ""); };
+  const refresh = async (card) => {
+    const slot = card.dataset.slot;
+    card.querySelector("img").src = `/photos/${slot}?size=thumb&t=${Date.now()}`;
+    try {
+      const r = await fetch(`/photos/${slot}?t=${Date.now()}`, { method: "HEAD", redirect: "manual" });
+      const custom = r.status === 200;
+      card.querySelector(".reset").disabled = !custom;
+      if (!card.querySelector(".status").textContent) say(card, custom ? "Showing your upload." : "Showing the original photo.");
+    } catch { /* offline: leave buttons as they are */ }
+  };
+  // Re-encode to a JPEG no bigger than MAX_SIDE. Returns null when this browser cannot read the file (HEIC outside Safari).
+  const shrink = async (file) => {
+    try {
+      const bmp = await createImageBitmap(file, { imageOrientation: "from-image" });
+      const k = Math.min(1, MAX_SIDE / Math.max(bmp.width, bmp.height));
+      const c = document.createElement("canvas");
+      c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+      c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+      const blob = await new Promise((res) => c.toBlob(res, "image/jpeg", 0.86));
+      return blob && new File([blob], "photo.jpg", { type: "image/jpeg" });
+    } catch { return null; }
+  };
+  for (const card of document.querySelectorAll(".card")) {
+    const input = card.querySelector("input[type=file]");
+    const up = card.querySelector(".upload");
+    const reset = card.querySelector(".reset");
+    input.addEventListener("change", () => {
+      up.disabled = !input.files.length;
+      if (input.files.length) say(card, `Ready: ${input.files[0].name}. Tap Upload.`);
+    });
+    up.addEventListener("click", async () => {
+      const file = input.files[0];
+      if (!file) return;
+      up.disabled = true; say(card, "Uploading…");
+      const ready = await shrink(file);
+      if (!ready) {
+        say(card, "This browser can't read that photo (it is probably an iPhone HEIC file). Share it from the Photos app, or set iPhone Settings › Camera › Formats to Most Compatible, then try again.", "err");
+        up.disabled = false; return;
+      }
+      const body = new FormData(); body.append("slot", card.dataset.slot); body.append("file", ready);
+      try {
+        const r = await fetch("/upload", { method: "POST", body });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(j.error || `Upload failed (${r.status}).`);
+        say(card, "Done. Your photo is live.", "ok"); input.value = "";
+      } catch (e) { say(card, e.message, "err"); up.disabled = false; }
+      refresh(card);
+    });
+    reset.addEventListener("click", async () => {
+      reset.disabled = true; say(card, "Putting the original back…");
+      try {
+        const r = await fetch(`/upload?slot=${encodeURIComponent(card.dataset.slot)}`, { method: "DELETE" });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(j.error || `That did not work (${r.status}).`);
+        say(card, "The original photo is back.", "ok");
+      } catch (e) { say(card, e.message, "err"); }
+      refresh(card);
+    });
+    refresh(card);
+  }
+})();
+</script>
+</body>
+</html>

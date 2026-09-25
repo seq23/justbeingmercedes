@@ -1,5 +1,6 @@
 [
   {
+    "slot": "photo-1",
     "file": "gallery/portrait.png",
     "slug": "portrait",
     "crop": [
@@ -12,6 +13,7 @@
     "alt": "Portrait of Mercedes in thick gold hoops, a gold rope chain with her Mercedes nameplate and an M pendant, and a red-and-white equestrian print blouse over a grey shirt, blunt bangs with highlights"
   },
   {
+    "slot": "photo-2",
     "file": "gallery/lawn.png",
     "slug": "lawn",
     "crop": [
@@ -24,6 +26,7 @@
     "alt": "Mercedes on a sunny lawn in a wide straw hat, gold aviators and hoops, an off-shoulder blue and yellow floral top and white linen trousers, holding an iridescent glass"
   },
   {
+    "slot": "photo-3",
     "file": "gallery/arch.png",
     "slug": "arch",
     "crop": [
@@ -36,6 +39,7 @@
     "alt": "Mercedes under a lit garden arch of string lights and greenery at night, one arm raised, in a white tank, camel wide-leg trousers, pink heels and a small woven bag"
   },
   {
+    "slot": "photo-4",
     "file": "gallery/street.png",
     "slug": "street",
     "crop": [
@@ -48,6 +52,7 @@
     "alt": "Mercedes on a brownstone-lined street in a cropped black leather jacket, navy shirt, wide light-wash jeans and aviators, carrying a Louis Vuitton bag hung with colorful charms"
   },
   {
+    "slot": "photo-5",
     "file": "gallery/stripes.png",
     "slug": "stripes",
     "crop": [
