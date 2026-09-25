@@ -30,10 +30,10 @@
 <body>
 <main class="cover">
   <figure class="hero">
-    <picture>
+    <a class="hero-link" href="#photo-hero"><picture>
       <source srcset="/assets/selfie.webp" type="image/webp">
       <img src="/assets/selfie.jpg" width="1077" height="1380" alt="Mercedes taking a selfie in a light-blue ribbed knit top, big silver hoop earrings and a gold nameplate necklace that reads Mercedes, her bangs streaked with blonde highlights">
-    </picture>
+    </picture></a>
   </figure>
 
   <div class="copy">
@@ -43,22 +43,20 @@
 
     <p class="bio">Mercedes is a New Yorker with a beauty obsession and a corporate career to match. By day she is a senior business strategy leader at L'Oréal and a Spelman College alum, a self-described Corporate Baddie. Off the clock she is a Black Barbie and a cool mom, sharing style and beauty on TikTok and Instagram and rounding up her favorite finds on Amazon, LTK and ShopMy. Beauty pro by day, beauty enthusiast always: she is just being Mercedes.</p>
 
-    <div class="thumbs">
-      <figure>
-        <picture>
-          <source srcset="/assets/lawn.webp" type="image/webp">
-          <img src="/assets/lawn.jpg" width="640" height="826" loading="lazy" alt="Mercedes on a sunny lawn in a wide straw hat, gold aviators and hoops, an off-shoulder blue and yellow floral top and white linen trousers, holding an iridescent glass">
-        </picture>
-        <figcaption>Summer, straw hat</figcaption>
-      </figure>
-      <figure>
-        <picture>
-          <source srcset="/assets/street.webp" type="image/webp">
-          <img src="/assets/street.jpg" width="640" height="755" loading="lazy" alt="Mercedes on a brownstone-lined street in a cropped black leather jacket, navy shirt, wide light-wash jeans and aviators, carrying a Louis Vuitton bag hung with colorful charms">
-        </picture>
-        <figcaption>Brownstone block</figcaption>
-      </figure>
-    </div>
+    <ul class="gallery" id="gallery" aria-label="More photos of Mercedes (tap to enlarge)">
+      <!-- gallery:tiles -->
+        <li><a class="tile" href="#photo-portrait">
+          <picture><source srcset="/assets/gallery/portrait-thumb.webp" type="image/webp"><img src="/assets/gallery/portrait-thumb.jpg" width="360" height="466" loading="lazy" alt="Portrait of Mercedes in thick gold hoops, a gold rope chain with her Mercedes nameplate and an M pendant, and a red-and-white equestrian print blouse over a grey shirt, blunt bangs with highlights"></picture></a></li>
+        <li><a class="tile" href="#photo-lawn">
+          <picture><source srcset="/assets/gallery/lawn-thumb.webp" type="image/webp"><img src="/assets/gallery/lawn-thumb.jpg" width="360" height="464" loading="lazy" alt="Mercedes on a sunny lawn in a wide straw hat, gold aviators and hoops, an off-shoulder blue and yellow floral top and white linen trousers, holding an iridescent glass"></picture></a></li>
+        <li><a class="tile" href="#photo-arch">
+          <picture><source srcset="/assets/gallery/arch-thumb.webp" type="image/webp"><img src="/assets/gallery/arch-thumb.jpg" width="360" height="457" loading="lazy" alt="Mercedes under a lit garden arch of string lights and greenery at night, one arm raised, in a white tank, camel wide-leg trousers, pink heels and a small woven bag"></picture></a></li>
+        <li><a class="tile" href="#photo-street">
+          <picture><source srcset="/assets/gallery/street-thumb.webp" type="image/webp"><img src="/assets/gallery/street-thumb.jpg" width="360" height="425" loading="lazy" alt="Mercedes on a brownstone-lined street in a cropped black leather jacket, navy shirt, wide light-wash jeans and aviators, carrying a Louis Vuitton bag hung with colorful charms"></picture></a></li>
+        <li><a class="tile" href="#photo-stripes">
+          <picture><source srcset="/assets/gallery/stripes-thumb.webp" type="image/webp"><img src="/assets/gallery/stripes-thumb.jpg" width="360" height="449" loading="lazy" alt="Mercedes on a sunny Brooklyn sidewalk beside an iron fence and a brick church, in a sleeveless multicolor striped midi dress, black sunglasses and white heels"></picture></a></li>
+      <!-- /gallery:tiles -->
+    </ul>
 
     <nav class="links" aria-label="Contact and socials">
       <!--email_off-->
@@ -78,5 +76,59 @@
     </nav>
   </div>
 </main>
+<!-- Enlarged photos: CSS-only lightbox. A tile links to #photo-<slug>; :target shows it.
+     Close link, backdrop tap or the browser Back button return to #gallery. -->
+<div class="lightboxes">
+  <div class="lb" id="photo-hero" role="dialog" aria-modal="true" aria-label="Mercedes, selfie">
+    <a class="lb-backdrop" href="#" tabindex="-1" aria-hidden="true"></a>
+    <figure class="lb-frame">
+      <picture><source srcset="/assets/selfie.webp" type="image/webp"><img class="lb-full" src="/assets/selfie.jpg" width="1077" height="1380" loading="lazy" alt="Mercedes taking a selfie in a light-blue ribbed knit top, big silver hoop earrings and a gold Mercedes nameplate necklace"></picture>
+      <figcaption>Light-blue knit, silver hoops</figcaption>
+    </figure>
+    <a class="lb-close" href="#" aria-label="Close photo">Close <span aria-hidden="true">&times;</span></a>
+  </div>
+  <!-- gallery:lightboxes -->
+  <div class="lb" id="photo-portrait" role="dialog" aria-modal="true" aria-label="Gold hoops, printed blouse">
+    <a class="lb-backdrop" href="#gallery" tabindex="-1" aria-hidden="true"></a>
+    <figure class="lb-frame">
+      <picture><source srcset="/assets/gallery/portrait.webp" type="image/webp"><img class="lb-full" src="/assets/gallery/portrait.jpg" width="992" height="1283" loading="lazy" alt="Portrait of Mercedes in thick gold hoops, a gold rope chain with her Mercedes nameplate and an M pendant, and a red-and-white equestrian print blouse over a grey shirt, blunt bangs with highlights"></picture>
+      <figcaption>Gold hoops, printed blouse</figcaption>
+    </figure>
+    <a class="lb-close" href="#gallery" aria-label="Close photo">Close <span aria-hidden="true">&times;</span></a>
+  </div>
+  <div class="lb" id="photo-lawn" role="dialog" aria-modal="true" aria-label="Summer, straw hat">
+    <a class="lb-backdrop" href="#gallery" tabindex="-1" aria-hidden="true"></a>
+    <figure class="lb-frame">
+      <picture><source srcset="/assets/gallery/lawn.webp" type="image/webp"><img class="lb-full" src="/assets/gallery/lawn.jpg" width="1069" height="1379" loading="lazy" alt="Mercedes on a sunny lawn in a wide straw hat, gold aviators and hoops, an off-shoulder blue and yellow floral top and white linen trousers, holding an iridescent glass"></picture>
+      <figcaption>Summer, straw hat</figcaption>
+    </figure>
+    <a class="lb-close" href="#gallery" aria-label="Close photo">Close <span aria-hidden="true">&times;</span></a>
+  </div>
+  <div class="lb" id="photo-arch" role="dialog" aria-modal="true" aria-label="Garden lights, evening">
+    <a class="lb-backdrop" href="#gallery" tabindex="-1" aria-hidden="true"></a>
+    <figure class="lb-frame">
+      <picture><source srcset="/assets/gallery/arch.webp" type="image/webp"><img class="lb-full" src="/assets/gallery/arch.jpg" width="988" height="1255" loading="lazy" alt="Mercedes under a lit garden arch of string lights and greenery at night, one arm raised, in a white tank, camel wide-leg trousers, pink heels and a small woven bag"></picture>
+      <figcaption>Garden lights, evening</figcaption>
+    </figure>
+    <a class="lb-close" href="#gallery" aria-label="Close photo">Close <span aria-hidden="true">&times;</span></a>
+  </div>
+  <div class="lb" id="photo-street" role="dialog" aria-modal="true" aria-label="Brownstone block">
+    <a class="lb-backdrop" href="#gallery" tabindex="-1" aria-hidden="true"></a>
+    <figure class="lb-frame">
+      <picture><source srcset="/assets/gallery/street.webp" type="image/webp"><img class="lb-full" src="/assets/gallery/street.jpg" width="650" height="767" loading="lazy" alt="Mercedes on a brownstone-lined street in a cropped black leather jacket, navy shirt, wide light-wash jeans and aviators, carrying a Louis Vuitton bag hung with colorful charms"></picture>
+      <figcaption>Brownstone block</figcaption>
+    </figure>
+    <a class="lb-close" href="#gallery" aria-label="Close photo">Close <span aria-hidden="true">&times;</span></a>
+  </div>
+  <div class="lb" id="photo-stripes" role="dialog" aria-modal="true" aria-label="Stripes by the church">
+    <a class="lb-backdrop" href="#gallery" tabindex="-1" aria-hidden="true"></a>
+    <figure class="lb-frame">
+      <picture><source srcset="/assets/gallery/stripes.webp" type="image/webp"><img class="lb-full" src="/assets/gallery/stripes.jpg" width="647" height="807" loading="lazy" alt="Mercedes on a sunny Brooklyn sidewalk beside an iron fence and a brick church, in a sleeveless multicolor striped midi dress, black sunglasses and white heels"></picture>
+      <figcaption>Stripes by the church</figcaption>
+    </figure>
+    <a class="lb-close" href="#gallery" aria-label="Close photo">Close <span aria-hidden="true">&times;</span></a>
+  </div>
+  <!-- /gallery:lightboxes -->
+</div>
 </body>
 </html>

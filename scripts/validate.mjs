@@ -16,6 +16,8 @@ const SOCIALS = {
   Linktree: "https://linktr.ee/merc.asare",
 };
 const MAX_IMAGE_BYTES = 400 * 1024;
+const MIN_GALLERY = 5; // small photos under the bio (the set Sequoia chose, 25 Sep 2026)
+const MAX_GALLERY = 8;
 const VIEWPORTS = [
   // name, width, height, max page height allowed
   ["desktop-1440x900", 1440, 900, 900],
@@ -116,7 +118,23 @@ try {
             description: document.querySelector('meta[property="og:description"]')?.content,
           },
           favicon: !!document.querySelector('link[rel~="icon"]'),
-          scripts: [...document.querySelectorAll("script[src]")].map((s) => s.src),
+          scripts: [...document.querySelectorAll("script")].map((s) => s.src || "inline <script>"),
+          localSrcs: [...document.querySelectorAll("img[src], source[srcset]")]
+            .flatMap((e) => (e.getAttribute("src") || e.getAttribute("srcset")).split(",").map((c) => c.trim().split(/\s+/)[0]))
+            .filter((u) => u.startsWith("/")),
+          tiles: [...document.querySelectorAll("#gallery a.tile")].map((a) => {
+            const id = (a.getAttribute("href") || "").replace(/^#/, "");
+            const lb = id ? document.getElementById(id) : null;
+            const thumb = a.querySelector("img");
+            const full = lb?.querySelector("img.lb-full");
+            return {
+              href: a.getAttribute("href"), id, hasLb: !!lb && lb.classList.contains("lb"),
+              thumb: thumb?.getAttribute("src"), full: full?.getAttribute("src"),
+              fullWebp: lb?.querySelector("source")?.getAttribute("srcset"),
+              fullAlt: (full?.getAttribute("alt") || "").trim(),
+              hasClose: !!lb?.querySelector("a.lb-close[href]"),
+            };
+          }),
         };
       });
       const mailto = d.hrefs.find((h) => h?.toLowerCase().startsWith(`mailto:${EMAIL}`));
@@ -132,7 +150,59 @@ try {
       check(d.title === "Just Being Mercedes", `title is "${d.title}", expected "Just Being Mercedes"`);
       check(!!d.og.title && !!d.og.image && !!d.og.description, "missing og:title / og:image / og:description");
       check(d.favicon, "no favicon link");
-      check(d.scripts.length === 0, `third-party or inline scripts are not allowed: ${d.scripts.join(", ")}`);
+      check(d.scripts.length === 0, `no scripts allowed (external or inline): ${d.scripts.join(", ")}`);
+      for (const u of new Set(d.localSrcs)) {
+        const f = join(PUBLIC, u);
+        const ok = await stat(f).then((st) => st.isFile()).catch(() => false);
+        check(ok, `image ${u} is referenced but missing from public/`);
+      }
+
+      // Gallery: 6-8 small photos, each opening its own full-size lightbox.
+      check(d.tiles.length >= MIN_GALLERY, `gallery has ${d.tiles.length} small photos (min ${MIN_GALLERY})`);
+      check(d.tiles.length <= MAX_GALLERY, `gallery has ${d.tiles.length} small photos (max ${MAX_GALLERY})`);
+      for (const t of d.tiles) {
+        check(/^#photo-[\w-]+$/.test(t.href || "") && t.hasLb, `tile ${t.href} has no matching .lb lightbox target`);
+        check(t.hasClose, `lightbox ${t.id} has no close link`);
+        check(t.fullAlt.length > 0, `lightbox ${t.id} image has no alt text`);
+        check(!!t.full && t.full !== t.thumb && !/-thumb\./.test(t.full), `lightbox ${t.id} shows the thumbnail, not the full-size photo`);
+        for (const u of [t.full, t.fullWebp].filter(Boolean)) {
+          const size = await stat(join(PUBLIC, u)).then((st) => st.size).catch(() => -1);
+          check(size > 0 && size <= MAX_IMAGE_BYTES, `full-size ${u} is ${size < 0 ? "missing" : Math.round(size / 1024) + " KB"} (max 400 KB)`);
+        }
+        // Open it for real: it must show, load the full file (bigger than the tile), then close.
+        await page.goto(base + t.href);
+        const lb = page.locator(`#${t.id}`);
+        const shown = await lb.isVisible();
+        check(shown, `lightbox ${t.id} does not appear when its tile is opened`);
+        if (shown) {
+          const full = lb.locator("img.lb-full");
+          await full.evaluate((i) => i.decode().catch(() => {}));
+          const nat = await full.evaluate((i) => i.naturalWidth);
+          const thumbW = await page.locator(`a.tile[href="${t.href}"] img`).evaluate((i) => Number(i.getAttribute("width")));
+          check(nat > thumbW, `lightbox ${t.id} loaded ${nat}px wide, not larger than its ${thumbW}px thumbnail`);
+          await lb.locator("a.lb-close").click();
+          check(!(await lb.isVisible()), `lightbox ${t.id} does not close from its close link`);
+        }
+      }
+      await page.goto(base);
+    }
+    const links = await page.evaluate(() => document.querySelector(".links")?.getBoundingClientRect().bottom ?? Infinity);
+    if (width > 760) check(links <= height, `${name}: the collab pill / social links end at ${Math.round(links)}px, below the ${height}px screen`);
+
+    // Tap the first tile like a phone user, screenshot the open lightbox, then use Back to close it.
+    const first = page.locator("#gallery a.tile").first();
+    if (await first.count()) {
+      await first.scrollIntoViewIfNeeded();
+      await first.click();
+      const open = page.locator(".lb:target");
+      await open.locator("img.lb-full").evaluate((i) => i.decode().catch(() => {})).catch(() => {});
+      await page.waitForTimeout(400);
+      check(await open.isVisible(), `${name}: tapping a tile does not open its lightbox`);
+      if (shots) await page.screenshot({ path: join(ROOT, "screenshots", `${name}-lightbox.png`) });
+      await page.goBack();
+      check((await page.locator(".lb:target").count()) === 0, `${name}: Back does not close the lightbox`);
+      const w = await page.evaluate(() => document.documentElement.scrollWidth);
+      check(w <= width, `${name}: horizontal scroll after using the gallery (${w}px)`);
     }
     await page.close();
   }
