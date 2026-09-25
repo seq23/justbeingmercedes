@@ -1,0 +1,14 @@
+{
+  "name": "justbeingmercedes",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "validate": "node scripts/validate.mjs",
+    "screenshots": "node scripts/validate.mjs --screenshots",
+    "deploy": "wrangler pages deploy public --project-name justbeingmercedes --branch main --commit-dirty=true"
+  },
+  "devDependencies": {
+    "playwright": "^1.55.0",
+    "wrangler": "^4.0.0"
+  }
+}

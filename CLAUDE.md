@@ -1,0 +1,3 @@
+# justbeingmercedes
+
+Static one-page site for Mercedes Asare at justbeingmercedes.com: plain HTML + CSS in `public/`, no framework, no build step, no scripts except Google Fonts. It deploys to the Cloudflare Pages project `justbeingmercedes` on every push to `main` (`.github/workflows/deploy.yml`; by hand `npm run deploy`). The page is ONE screen: it must not scroll at 1440×900 or 1280×800, and at most one short scroll on a 390×844 phone; `npm run validate` (scripts/validate.mjs, Playwright) enforces this plus the collab mailto, the three social links, one `<h1>`, alt text and the 400 KB image cap. Every bio fact must come from her public Instagram, TikTok, LinkedIn or Linktree. Operating steps are in RUNBOOK.md.
