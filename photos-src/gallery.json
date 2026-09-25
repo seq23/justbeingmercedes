@@ -1,0 +1,62 @@
+[
+  {
+    "file": "gallery/portrait.png",
+    "slug": "portrait",
+    "crop": [
+      4,
+      0,
+      996,
+      1283
+    ],
+    "caption": "Gold hoops, printed blouse",
+    "alt": "Portrait of Mercedes in thick gold hoops, a gold rope chain with her Mercedes nameplate and an M pendant, and a red-and-white equestrian print blouse over a grey shirt, blunt bangs with highlights"
+  },
+  {
+    "file": "gallery/lawn.png",
+    "slug": "lawn",
+    "crop": [
+      6,
+      6,
+      1075,
+      1385
+    ],
+    "caption": "Summer, straw hat",
+    "alt": "Mercedes on a sunny lawn in a wide straw hat, gold aviators and hoops, an off-shoulder blue and yellow floral top and white linen trousers, holding an iridescent glass"
+  },
+  {
+    "file": "gallery/arch.png",
+    "slug": "arch",
+    "crop": [
+      7,
+      3,
+      995,
+      1258
+    ],
+    "caption": "Garden lights, evening",
+    "alt": "Mercedes under a lit garden arch of string lights and greenery at night, one arm raised, in a white tank, camel wide-leg trousers, pink heels and a small woven bag"
+  },
+  {
+    "file": "gallery/street.png",
+    "slug": "street",
+    "crop": [
+      6,
+      8,
+      656,
+      775
+    ],
+    "caption": "Brownstone block",
+    "alt": "Mercedes on a brownstone-lined street in a cropped black leather jacket, navy shirt, wide light-wash jeans and aviators, carrying a Louis Vuitton bag hung with colorful charms"
+  },
+  {
+    "file": "gallery/stripes.png",
+    "slug": "stripes",
+    "crop": [
+      12,
+      2,
+      659,
+      809
+    ],
+    "caption": "Stripes by the church",
+    "alt": "Mercedes on a sunny Brooklyn sidewalk beside an iron fence and a brick church, in a sleeveless multicolor striped midi dress, black sunglasses and white heels"
+  }
+]

@@ -1,11 +1,13 @@
 # RUNBOOK — justbeingmercedes
 
 ## Update a photo
-1. Save the new image into `photos-src/` as `selfie.png` (hero), `lawn.png` or `street.png` (small ones).
-2. Adjust its crop box in `scripts/build-images.py` if it carries Instagram UI (dots, arrows), else use the full frame.
-3. `python3 scripts/build-images.py` — writes WebP + JPEG to `public/assets/`, never upscales.
-4. If the hero's pixel size changed, update `width`/`height` on its `<img>` and `og:image:width/height` in `public/index.html`.
-5. `npm run screenshots`, look at `screenshots/*.png`, then commit and push.
+- **Hero**: replace `photos-src/selfie.png`; adjust `HERO` crop in `scripts/build-images.py` if it carries Instagram UI. If its pixel size changed, update `width`/`height` on both hero `<img>` tags (page and `#photo-hero` lightbox) and `og:image:width/height`.
+- **Small photos (5–8)**: add the file under `photos-src/gallery/` and an entry in `photos-src/gallery.json` (`file`, `slug`, `crop` or `null`, `caption`, `alt`). Remove an entry to drop a photo.
+- Run `python3 scripts/build-images.py` — writes `public/assets/gallery/<slug>.{webp,jpg}` (full, ≤1440px wide) and `<slug>-thumb.{webp,jpg}`, all under 400 KB, never upscaled, deletes outputs no longer in the manifest, and regenerates the `<!-- gallery:tiles -->` and `<!-- gallery:lightboxes -->` blocks in `public/index.html`. Do not hand-edit those blocks.
+- `npm run screenshots`, look at `screenshots/*.png` (including `*-lightbox.png`), then commit and push.
+
+## How the enlarged photos work
+CSS only, no JavaScript. Each tile links to `#photo-<slug>`; the matching `.lb` element shows through `:target`. Close by the Close button, a tap on the dark backdrop, or the browser Back button. There is no Escape-key close (that would need a script, and the page ships none; the validator fails on any `<script>`).
 
 ## Update the bio
 Edit `<p class="bio">` in `public/index.html`. 60–120 words, sourced facts only (Instagram @merc.asare, TikTok @mercasare, LinkedIn /in/mercasare, linktr.ee/merc.asare). Run `npm run validate`; a longer bio can break the one-screen rule and the validator will say so.
