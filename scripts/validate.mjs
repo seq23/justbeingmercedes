@@ -47,6 +47,16 @@ for (const f of images) {
   check(size <= MAX_IMAGE_BYTES, `${f.slice(ROOT.length + 1)} is ${Math.round(size / 1024)} KB (max 400 KB)`);
 }
 
+// 1b. Cloudflare's zone-wide email obfuscation rewrites mailto links into /cdn-cgi/ redirects plus an
+// injected script. The address must sit inside <!--email_off--> ... <!--/email_off--> so it ships as-is.
+{
+  const html = await readFile(join(PUBLIC, "index.html"), "utf8");
+  const off = html.match(/<!--email_off-->([\s\S]*?)<!--\/email_off-->/g) || [];
+  const outside = html.replace(/<!--email_off-->[\s\S]*?<!--\/email_off-->/g, "");
+  check(off.some((b) => b.includes(`mailto:${EMAIL}`)), "the collab mailto is not wrapped in <!--email_off--> (Cloudflare will obfuscate it)");
+  check(!outside.includes(EMAIL), "the email address appears outside <!--email_off--> (Cloudflare will obfuscate it)");
+}
+
 // 2. Serve public/ exactly as Pages will (root-relative paths) and read the page in Chromium.
 const server = createServer(async (req, res) => {
   const path = decodeURIComponent(new URL(req.url, "http://x").pathname);

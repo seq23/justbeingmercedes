@@ -11,7 +11,7 @@
 Edit `<p class="bio">` in `public/index.html`. 60–120 words, sourced facts only (Instagram @merc.asare, TikTok @mercasare, LinkedIn /in/mercasare, linktr.ee/merc.asare). Run `npm run validate`; a longer bio can break the one-screen rule and the validator will say so.
 
 ## Update the email
-Change the `mailto:` href and the visible `.addr` text in `public/index.html`, and `EMAIL` in `scripts/validate.mjs`. The address is the one on her TikTok and Linktree bios.
+Change the `mailto:` href and the visible `.addr` text in `public/index.html`, and `EMAIL` in `scripts/validate.mjs`. The address is the one on her TikTok and Linktree bios. Keep it inside the `<!--email_off-->` … `<!--/email_off-->` comments and nowhere else on the page: the zone has Cloudflare email obfuscation on, which otherwise rewrites the mailto into a `/cdn-cgi/` link plus a script (the validator fails if you forget).
 
 ## Deploy
 - Push to `main` → **Deploy** workflow publishes `public/` to Pages project `justbeingmercedes`.
