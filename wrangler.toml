@@ -2,7 +2,17 @@ name = "justbeingmercedes"
 compatibility_date = "2026-09-25"
 pages_build_output_dir = "public"
 
-# Uploaded replacement photos (see functions/). Slots: hero, photo-1 .. photo-5.
+# Uploaded replacement photos, their descriptions and the bio (see functions/). Production keys are
+# `hero`, `photo-1` .. `photo-5`, `og-hero`, `site.json`, `ratelimit/*`.
 [[r2_buckets]]
+binding = "PHOTOS"
+bucket_name = "justbeingmercedes-photos"
+
+# Branch previews share the bucket but every key gets STORE_PREFIX, so testing a preview deployment
+# never changes what justbeingmercedes.com shows. (Preview bindings must be restated in full here.)
+[env.preview.vars]
+STORE_PREFIX = "preview/"
+
+[[env.preview.r2_buckets]]
 binding = "PHOTOS"
 bucket_name = "justbeingmercedes-photos"

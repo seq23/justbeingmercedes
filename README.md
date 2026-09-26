@@ -9,13 +9,16 @@ One screen, a big photo, her name, a short bio, a row of small photos that open 
 - Every push to `main` runs two GitHub Actions: **Validate** (checks the page) and **Deploy** (publishes `public/`).
 - To publish by hand from a Mac with wrangler logged in: `npm run deploy`.
 
-## Mercedes can change the photos herself
-Go to **https://justbeingmercedes.com/upload**. Each photo on the site has a card: choose a photo, tap Upload, and it shows on the site within about five minutes. "Back to original" puts the first photo back. No password: **anyone with that link can change the photos, by the owner's choice** (25 Sep 2026). It only accepts changes sent from that page, and at most 30 changes an hour from one connection.
+## Mercedes can change her bio and photos herself
+Go to **https://justbeingmercedes.com/upload**. No password: **anyone with that link can make these changes, by the owner's choice** (25 Sep 2026). It only accepts changes sent from that page, and at most 30 changes an hour from one connection.
+- **Your bio** (top card): the current bio and the short line above her name, a live character count (550 characters, up to 4 paragraphs, so the page still fits one screen), Save, and "Back to original". Plain text only: every new line becomes a paragraph; anything that looks like code is shown as typed.
+- **Photos** (one card per photo): choose a photo, optionally describe it ("What's in this photo? It helps people using screen readers"), tap Upload. The description becomes the photo's alt text; a replaced photo with no description is read out as "Photo of Mercedes". A description can be changed later without re-uploading. "Back to original" puts back the first photo and its original description.
+- **Link previews**: when she changes the big photo, the preview shown when someone shares the site link (og:image) switches to it too.
 
-Uploaded photos live in the Cloudflare R2 bucket `justbeingmercedes-photos` (one file per spot: `hero`, `photo-1` … `photo-5`). The page asks `/photos/<spot>` for each picture: an upload wins, otherwise it falls back to the original in `public/assets/`.
+Changes show within a minute or two. Uploaded photos live in the Cloudflare R2 bucket `justbeingmercedes-photos` (one file per spot: `hero`, `photo-1` … `photo-5`, plus `og-hero` for the link preview); her bio and descriptions are in `site.json` in the same bucket. The page asks `/photos/<spot>` for each picture: an upload wins, otherwise it falls back to the original in `public/assets/`.
 
 ## Changing things (plain English)
-- **The bio**: open `public/index.html`, find the paragraph that starts `<p class="bio">`, change the words between the tags. Keep it to about 60 to 120 words so it still fits one screen. Only write things Mercedes has said publicly.
+- **The bio**: Mercedes can change it at /upload (that wins over the file). The original is in `public/index.html` inside `<div class="bio">`, one `<p>` per paragraph; change the words between the tags. Keep it to about 60 to 120 words so it still fits one screen. Only write things Mercedes has said publicly.
 - **The big photo**: replace `photos-src/selfie.png`, then run `python3 scripts/build-images.py`.
 - **The small photos**: put the picture in `photos-src/gallery/`, then add an entry to `photos-src/gallery.json` with a short caption and a one-sentence description of the outfit and setting (that becomes the alt text for screen readers). Order in that file is order on the page. Run `python3 scripts/build-images.py`: it crops off Instagram buttons (the `crop` box, or `null` for none), makes a small tile and a full-size copy, keeps each under 400 KB, and rewrites the photo row and its enlarged views in `index.html`. Keep 5 to 8 small photos.
 - **The email**: in `public/index.html`, change both the `mailto:` address and the address shown under "Collabs". Then change `EMAIL` at the top of `scripts/validate.mjs` to match.
