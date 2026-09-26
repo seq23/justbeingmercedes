@@ -1,0 +1,40 @@
+# The page in a real browser (Chromium at 1440x900, 1280x800 and a 390x844 phone): one screen, no
+# horizontal scroll, hero loads, links, alt text, lightboxes — plus screenshots. Nightly and on
+# demand, never per merge.
+#
+# Build first, test in batches (26 Sep 2026). The merge gate is `validate.yml` (static checks, the
+# upload e2e, guards). This runs on main's head once a night and whenever dispatched; on success
+# `deploy.yml` publishes exactly this sha to justbeingmercedes.com. A red nightly leaves production
+# where it is and is fixed first. `timeout-minutes` is a fault detector (~4x normal), never a budget.
+#
+# NOT `push`, NOT `pull_request`: scripts/validate-workflows.mjs fails the merge gate if either
+# trigger comes back.
+name: e2e
+on:
+  schedule:
+    - cron: "20 8 * * *" # nightly 08:20 UTC (03:20 CT), main's head
+  workflow_dispatch:
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    # Normal: ~1 min including the Chromium install. 10 is a fault detector, never a budget.
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx playwright install --with-deps chromium
+      - name: The page in Chromium, three viewports, with screenshots
+        run: npm run screenshots
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots
+          path: screenshots/
+          retention-days: 14
