@@ -1,4 +1,2 @@
+node_modules
 node_modules/
-.wrangler/
-screenshots/
-.DS_Store
