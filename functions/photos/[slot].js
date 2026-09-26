@@ -1,6 +1,7 @@
-// GET/HEAD /photos/<slot>[?size=thumb]
+// GET/HEAD /photos/<slot>[?size=thumb][&v=<version>]  (v only busts caches; the main page adds it)
 // Serves Mercedes' uploaded replacement from R2 when there is one, else 302s to the static photo in /assets.
 import { SLOTS } from "../_lib/slots.js";
+import { key } from "../_lib/store.js";
 
 const CACHE = "public, max-age=300";
 
@@ -11,7 +12,7 @@ export async function onRequest({ request, params, env }) {
   const slot = SLOTS[params.slot];
   if (!slot) return new Response("No such photo", { status: 404 });
 
-  const obj = env.PHOTOS ? await env.PHOTOS.get(params.slot) : null;
+  const obj = env.PHOTOS ? await env.PHOTOS.get(key(env, params.slot)) : null;
   if (obj) {
     const headers = new Headers({
       "Content-Type": obj.httpMetadata?.contentType || "application/octet-stream",

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Change Your Photos</title>
+<title>Change Your Page</title>
 <meta name="robots" content="noindex, nofollow">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -36,15 +36,41 @@
   .status.ok { color: var(--denim); }
   .status.err { color: #a3321f; }
   :root[data-theme="dark"] .status.err { color: #f08a74; }
+  .describe { font-size: .85rem; color: var(--ink); }
+  .describe span, .hint { color: var(--muted); }
+  .hint { margin: 0; font-size: .8rem; line-height: 1.35; }
+  .card textarea, .bio-card textarea, .bio-card input { width: 100%; font: 400 .95rem/1.4 var(--sans); color: var(--ink); background: var(--ground); border: 1px solid var(--gold-soft); border-radius: 6px; padding: .5rem .6rem; }
+  .card textarea { resize: vertical; min-height: 3.2rem; }
+  .card textarea:focus-visible, .bio-card textarea:focus-visible, .bio-card input:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
+  .bio-card { display: flex; flex-direction: column; gap: .5rem; padding: 1rem; background: var(--frame); border-radius: 6px; box-shadow: 0 8px 20px -16px rgba(36, 22, 15, .5); }
+  .bio-card h2 { margin: 0 0 .2rem; font: 500 .78rem/1.2 var(--sans); letter-spacing: .16em; text-transform: uppercase; color: var(--denim); }
+  .bio-card label { font-size: .88rem; }
+  .bio-card textarea { min-height: 11rem; resize: vertical; }
+  .count { margin: 0; font-size: .8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .count.over { color: #a3321f; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .status.err { color: #f08a74; } }
 </style>
 </head>
 <body>
 <main class="up">
   <header>
-    <h1>Change your photos</h1>
-    <p class="lede">Pick a photo for any spot, then tap Upload. It shows on <a href="/">justbeingmercedes.com</a> within a few minutes. "Back to original" puts the first photo back. Photos are shrunk on your phone before they are sent, so large ones are fine.</p>
+    <h1>Change your page</h1>
+    <p class="lede">Change your bio or any photo here. Changes show on <a href="/">justbeingmercedes.com</a> within a minute or two. "Back to original" puts back what was there first. Photos are shrunk on your phone before they are sent, so large ones are fine.</p>
   </header>
+  <section class="bio-card" id="bio-card" aria-labelledby="bio-h">
+    <h2 id="bio-h">Your bio</h2>
+    <label for="tagline">Short line above your name <span class="hint">(parts separated by ·)</span></label>
+    <input id="tagline" name="tagline" type="text" maxlength="40" autocomplete="off" aria-describedby="tagline-count">
+    <p class="count" id="tagline-count" aria-live="polite"></p>
+    <label for="bio">Bio</label>
+    <textarea id="bio" name="bio" rows="8" maxlength="550" aria-describedby="bio-count bio-hint"></textarea>
+    <p class="count" id="bio-count" aria-live="polite"></p>
+    <p class="hint" id="bio-hint">Plain words only. Each new line starts a new paragraph (up to 4). About 60 to 110 words fits the page best.</p>
+    <div class="actions"><button type="button" class="upload" id="bio-save" disabled>Save</button><button type="button" class="reset" id="bio-reset" disabled>Back to original</button></div>
+    <p class="status" id="bio-status" role="status" aria-live="polite"></p>
+  </section>
+  <h2 class="sr-only">Your photos</h2>
   <ul class="cards">
     <!-- gallery:upload -->
     <li class="card" data-slot="hero">
@@ -53,6 +79,9 @@
         <h2>Big photo</h2>
         <p class="caption">The large photo beside your name</p>
         <label class="pick">Choose a photo<input type="file" name="file" accept="image/jpeg,image/png,image/webp,image/heic,.heic"></label>
+        <label class="describe" for="alt-hero">Describe this photo <span>(optional)</span></label>
+        <textarea id="alt-hero" name="alt" rows="2" maxlength="300" aria-describedby="alt-hero-hint" placeholder="What's in this photo?"></textarea>
+        <p class="hint" id="alt-hero-hint">What's in this photo? It helps people using screen readers.</p>
         <div class="actions"><button type="button" class="upload" disabled>Upload</button><button type="button" class="reset">Back to original</button></div>
         <p class="status" role="status" aria-live="polite"></p>
       </div>
@@ -63,6 +92,9 @@
         <h2>Small photo 1</h2>
         <p class="caption">Gold hoops, printed blouse</p>
         <label class="pick">Choose a photo<input type="file" name="file" accept="image/jpeg,image/png,image/webp,image/heic,.heic"></label>
+        <label class="describe" for="alt-photo-1">Describe this photo <span>(optional)</span></label>
+        <textarea id="alt-photo-1" name="alt" rows="2" maxlength="300" aria-describedby="alt-photo-1-hint" placeholder="What's in this photo?"></textarea>
+        <p class="hint" id="alt-photo-1-hint">What's in this photo? It helps people using screen readers.</p>
         <div class="actions"><button type="button" class="upload" disabled>Upload</button><button type="button" class="reset">Back to original</button></div>
         <p class="status" role="status" aria-live="polite"></p>
       </div>
@@ -73,6 +105,9 @@
         <h2>Small photo 2</h2>
         <p class="caption">Summer, straw hat</p>
         <label class="pick">Choose a photo<input type="file" name="file" accept="image/jpeg,image/png,image/webp,image/heic,.heic"></label>
+        <label class="describe" for="alt-photo-2">Describe this photo <span>(optional)</span></label>
+        <textarea id="alt-photo-2" name="alt" rows="2" maxlength="300" aria-describedby="alt-photo-2-hint" placeholder="What's in this photo?"></textarea>
+        <p class="hint" id="alt-photo-2-hint">What's in this photo? It helps people using screen readers.</p>
         <div class="actions"><button type="button" class="upload" disabled>Upload</button><button type="button" class="reset">Back to original</button></div>
         <p class="status" role="status" aria-live="polite"></p>
       </div>
@@ -83,6 +118,9 @@
         <h2>Small photo 3</h2>
         <p class="caption">Garden lights, evening</p>
         <label class="pick">Choose a photo<input type="file" name="file" accept="image/jpeg,image/png,image/webp,image/heic,.heic"></label>
+        <label class="describe" for="alt-photo-3">Describe this photo <span>(optional)</span></label>
+        <textarea id="alt-photo-3" name="alt" rows="2" maxlength="300" aria-describedby="alt-photo-3-hint" placeholder="What's in this photo?"></textarea>
+        <p class="hint" id="alt-photo-3-hint">What's in this photo? It helps people using screen readers.</p>
         <div class="actions"><button type="button" class="upload" disabled>Upload</button><button type="button" class="reset">Back to original</button></div>
         <p class="status" role="status" aria-live="polite"></p>
       </div>
@@ -93,6 +131,9 @@
         <h2>Small photo 4</h2>
         <p class="caption">Brownstone block</p>
         <label class="pick">Choose a photo<input type="file" name="file" accept="image/jpeg,image/png,image/webp,image/heic,.heic"></label>
+        <label class="describe" for="alt-photo-4">Describe this photo <span>(optional)</span></label>
+        <textarea id="alt-photo-4" name="alt" rows="2" maxlength="300" aria-describedby="alt-photo-4-hint" placeholder="What's in this photo?"></textarea>
+        <p class="hint" id="alt-photo-4-hint">What's in this photo? It helps people using screen readers.</p>
         <div class="actions"><button type="button" class="upload" disabled>Upload</button><button type="button" class="reset">Back to original</button></div>
         <p class="status" role="status" aria-live="polite"></p>
       </div>
@@ -103,6 +144,9 @@
         <h2>Small photo 5</h2>
         <p class="caption">Stripes by the church</p>
         <label class="pick">Choose a photo<input type="file" name="file" accept="image/jpeg,image/png,image/webp,image/heic,.heic"></label>
+        <label class="describe" for="alt-photo-5">Describe this photo <span>(optional)</span></label>
+        <textarea id="alt-photo-5" name="alt" rows="2" maxlength="300" aria-describedby="alt-photo-5-hint" placeholder="What's in this photo?"></textarea>
+        <p class="hint" id="alt-photo-5-hint">What's in this photo? It helps people using screen readers.</p>
         <div class="actions"><button type="button" class="upload" disabled>Upload</button><button type="button" class="reset">Back to original</button></div>
         <p class="status" role="status" aria-live="polite"></p>
       </div>
@@ -113,22 +157,67 @@
 <script>
 (() => {
   const MAX_SIDE = 2000;
-  const say = (card, text, kind) => { const s = card.querySelector(".status"); s.textContent = text; s.className = "status" + (kind ? " " + kind : ""); };
-  const refresh = async (card) => {
-    const slot = card.dataset.slot;
-    card.querySelector("img").src = `/photos/${slot}?size=thumb&t=${Date.now()}`;
-    try {
-      const r = await fetch(`/photos/${slot}?t=${Date.now()}`, { method: "HEAD", redirect: "manual" });
-      const custom = r.status === 200;
-      card.querySelector(".reset").disabled = !custom;
-      if (!card.querySelector(".status").textContent) say(card, custom ? "Showing your upload." : "Showing the original photo.");
-    } catch { /* offline: leave buttons as they are */ }
+  const SHARE_SIDE = 1200; // the link-preview (og:image) copy of the big photo
+  let state = null; // GET /content: bio, each spot's description, limits
+  const say = (el, text, kind) => { const s = el.querySelector(".status") || el; s.textContent = text; s.className = "status" + (kind ? " " + kind : ""); };
+  const load = async () => {
+    try { const r = await fetch("/content", { cache: "no-store" }); if (r.ok) state = await r.json(); } catch { /* offline */ }
+    return state;
   };
-  // Re-encode to a JPEG no bigger than MAX_SIDE. Returns null when this browser cannot read the file (HEIC outside Safari).
-  const shrink = async (file) => {
+
+  // ---- Bio ----
+  const bioCard = document.getElementById("bio-card");
+  const bio = document.getElementById("bio");
+  const tagline = document.getElementById("tagline");
+  const bioSave = document.getElementById("bio-save");
+  const bioReset = document.getElementById("bio-reset");
+  const bioStatus = document.getElementById("bio-status");
+  const maxParas = () => state?.limits?.paragraphs || 4;
+  const paras = (t) => t.split("\n").map((l) => l.trim()).filter(Boolean).length;
+  const counts = () => {
+    const max = Number(bio.maxLength), n = bio.value.length, p = paras(bio.value);
+    const c = document.getElementById("bio-count");
+    c.textContent = `${n} / ${max} characters` + (p > maxParas() ? ` · ${p} paragraphs (keep it to ${maxParas()})` : "");
+    c.className = "count" + (n > max || p > maxParas() ? " over" : "");
+    document.getElementById("tagline-count").textContent = `${tagline.value.length} / ${tagline.maxLength} characters`;
+    const saved = state?.bio;
+    bioSave.disabled = !bio.value.trim() || p > maxParas() || (saved && bio.value === saved.text && tagline.value === saved.tagline);
+  };
+  const fillBio = () => {
+    if (!state) return;
+    bio.value = state.bio.text; tagline.value = state.bio.tagline;
+    bioReset.disabled = !state.bio.custom;
+    if (!bioStatus.textContent) say(bioStatus, state.bio.custom ? "Showing your bio." : "Showing the original bio.");
+    counts();
+  };
+  bio.addEventListener("input", counts); tagline.addEventListener("input", counts);
+  bioSave.addEventListener("click", async () => {
+    bioSave.disabled = true; say(bioStatus, "Saving…");
+    try {
+      const r = await fetch("/bio", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ bio: bio.value, tagline: tagline.value }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || `Saving failed (${r.status}).`);
+      say(bioStatus, "Saved. Your bio is live.", "ok");
+      await load(); fillBio();
+    } catch (e) { say(bioStatus, e.message, "err"); counts(); }
+  });
+  bioReset.addEventListener("click", async () => {
+    bioReset.disabled = true; say(bioStatus, "Putting the original bio back…");
+    try {
+      const r = await fetch("/bio", { method: "DELETE" });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || `That did not work (${r.status}).`);
+      say(bioStatus, "The original bio is back.", "ok");
+    } catch (e) { say(bioStatus, e.message, "err"); }
+    await load(); fillBio();
+  });
+
+  // ---- Photos ----
+  // Re-encode to a JPEG no bigger than side. Returns null when this browser cannot read the file (HEIC outside Safari).
+  const shrink = async (file, side) => {
     try {
       const bmp = await createImageBitmap(file, { imageOrientation: "from-image" });
-      const k = Math.min(1, MAX_SIDE / Math.max(bmp.width, bmp.height));
+      const k = Math.min(1, side / Math.max(bmp.width, bmp.height));
       const c = document.createElement("canvas");
       c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
       c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
@@ -136,31 +225,61 @@
       return blob && new File([blob], "photo.jpg", { type: "image/jpeg" });
     } catch { return null; }
   };
-  for (const card of document.querySelectorAll(".card")) {
+  const cards = [...document.querySelectorAll(".card")];
+  const slotState = (card) => state?.slots?.[card.dataset.slot] || { custom: false, alt: "" };
+  const sync = (card) => {
     const input = card.querySelector("input[type=file]");
+    const alt = card.querySelector("textarea[name=alt]");
+    const up = card.querySelector(".upload");
+    const st = slotState(card);
+    const file = input.files.length > 0;
+    up.textContent = file || !st.custom ? "Upload" : "Save description";
+    up.disabled = !(file || (st.custom && alt.value.trim() !== st.alt));
+  };
+  const refresh = (card, keepText) => {
+    const slot = card.dataset.slot, st = slotState(card);
+    card.querySelector("img").src = `/photos/${slot}?size=thumb&t=${Date.now()}`;
+    card.querySelector(".reset").disabled = !st.custom;
+    const cap = card.querySelector(".caption");
+    cap.dataset.original ??= cap.textContent;
+    cap.textContent = st.custom ? "Your photo" : cap.dataset.original;
+    if (!keepText) card.querySelector("textarea[name=alt]").value = st.alt;
+    if (!card.querySelector(".status").textContent) say(card, st.custom ? "Showing your upload." : "Showing the original photo.");
+    sync(card);
+  };
+  for (const card of cards) {
+    const input = card.querySelector("input[type=file]");
+    const alt = card.querySelector("textarea[name=alt]");
     const up = card.querySelector(".upload");
     const reset = card.querySelector(".reset");
     input.addEventListener("change", () => {
-      up.disabled = !input.files.length;
-      if (input.files.length) say(card, `Ready: ${input.files[0].name}. Tap Upload.`);
+      if (input.files.length) { alt.value = ""; say(card, `Ready: ${input.files[0].name}. Describe it if you like, then tap Upload.`); }
+      sync(card);
     });
+    alt.addEventListener("input", () => sync(card));
     up.addEventListener("click", async () => {
       const file = input.files[0];
-      if (!file) return;
-      up.disabled = true; say(card, "Uploading…");
-      const ready = await shrink(file);
-      if (!ready) {
-        say(card, "This browser can't read that photo (it is probably an iPhone HEIC file). Share it from the Photos app, or set iPhone Settings › Camera › Formats to Most Compatible, then try again.", "err");
-        up.disabled = false; return;
+      const st = slotState(card);
+      if (!file && !st.custom) return;
+      up.disabled = true; say(card, file ? "Uploading…" : "Saving…");
+      const body = new FormData(); body.append("slot", card.dataset.slot); body.append("alt", alt.value);
+      if (file) {
+        const ready = await shrink(file, MAX_SIDE);
+        if (!ready) {
+          say(card, "This browser can't read that photo (it is probably an iPhone HEIC file). Share it from the Photos app, or set iPhone Settings › Camera › Formats to Most Compatible, then try again.", "err");
+          up.disabled = false; return;
+        }
+        body.append("file", ready);
+        if (card.dataset.slot === "hero") { const share = await shrink(file, SHARE_SIDE); if (share) body.append("share", share, "share.jpg"); }
       }
-      const body = new FormData(); body.append("slot", card.dataset.slot); body.append("file", ready);
       try {
         const r = await fetch("/upload", { method: "POST", body });
         const j = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(j.error || `Upload failed (${r.status}).`);
-        say(card, "Done. Your photo is live.", "ok"); input.value = "";
-      } catch (e) { say(card, e.message, "err"); up.disabled = false; }
-      refresh(card);
+        say(card, file ? (alt.value.trim() ? "Done. Your photo is live." : "Done. Your photo is live. Add a description any time.") : "Description saved.", "ok");
+        input.value = "";
+      } catch (e) { say(card, e.message, "err"); await load(); refresh(card, true); return; }
+      await load(); refresh(card);
     });
     reset.addEventListener("click", async () => {
       reset.disabled = true; say(card, "Putting the original back…");
@@ -170,10 +289,10 @@
         if (!r.ok) throw new Error(j.error || `That did not work (${r.status}).`);
         say(card, "The original photo is back.", "ok");
       } catch (e) { say(card, e.message, "err"); }
-      refresh(card);
+      await load(); refresh(card);
     });
-    refresh(card);
   }
+  load().then(() => { fillBio(); cards.forEach((c) => refresh(c)); counts(); });
 })();
 </script>
 </body>

@@ -7,6 +7,7 @@ import { extname, join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 import { SLOTS } from "../functions/_lib/slots.js";
+import * as store from "../functions/_lib/store.js";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const PUBLIC = join(ROOT, "public");
@@ -84,6 +85,90 @@ check(!!SLOTS.hero, "no hero slot in functions/_lib/slots.js");
   }
 }
 
+// 1d. Mercedes' edits (bio, short line, photo descriptions, link-preview photo): the rendering helpers
+// escape everything, the upload page's limits are the server's limits, the main-page rewriter falls back to
+// the static page when R2 fails, and branch previews write under their own prefix.
+const WORST_BIO = ((html) => {
+  // BIO_MAX characters of real-length words in BIO_MAX_PARAGRAPHS lines: the longest bio /bio accepts.
+  const words = store.originalCopy(html).text.split(/\s+/);
+  let t = "", i = 0;
+  while ((t + " " + words[i % words.length]).length <= store.BIO_MAX - store.BIO_MAX_PARAGRAPHS) t += (t ? " " : "") + words[i++ % words.length];
+  const w = t.split(" "), per = Math.ceil(w.length / store.BIO_MAX_PARAGRAPHS);
+  return Array.from({ length: store.BIO_MAX_PARAGRAPHS }, (_, k) => w.slice(k * per, (k + 1) * per).join(" ")).join("\n");
+})(await readFile(join(PUBLIC, "index.html"), "utf8"));
+const WORST_TAGLINE = "Style & Beauty · New York · Corporate Babe".slice(0, store.TAGLINE_MAX);
+{
+  const indexHtml = await readFile(join(PUBLIC, "index.html"), "utf8");
+  const tricky = '<script>alert(1)</script> & "q" \'s\r\n\r\n\r\n  second\u0007 line 💄​  \n';
+  check(store.bioHtml(tricky) === "<!--email_off--><p>&lt;script&gt;alert(1)&lt;/script&gt; &amp; &quot;q&quot; &#39;s</p><p>second line 💄</p><!--/email_off-->",
+    `bioHtml does not escape / paragraph / scrub as pinned: ${store.bioHtml(tricky)}`);
+  check(store.cleanBio(tricky) === '<script>alert(1)</script> & "q" \'s\n\nsecond line 💄', "cleanBio does not normalise CRLF, blank lines and control characters");
+  check(store.bioParagraphs("a\n\n\n\nb\nc").length === 3, "bioParagraphs: each non-blank line must be one paragraph");
+  check(store.taglineHtml("Style <b> · NYC") === '<span>Style &lt;b&gt;</span><span aria-hidden="true">·</span><span>NYC</span>', `taglineHtml does not escape/split: ${store.taglineHtml("Style <b> · NYC")}`);
+  check(store.cleanLine("  a\n b\u0000\t c ") === "a b c", "cleanLine does not collapse to one clean line");
+  check(WORST_BIO.length <= store.BIO_MAX && WORST_BIO.length > store.BIO_MAX - 40 && store.bioParagraphs(WORST_BIO).length === store.BIO_MAX_PARAGRAPHS,
+    `worst-case bio fixture is ${WORST_BIO.length} chars / ${store.bioParagraphs(WORST_BIO).length} paragraphs, not the limit`);
+  const orig = store.originalCopy(indexHtml);
+  check(orig.text.length > 200 && !/[<>]/.test(orig.text), `originalCopy cannot read the bio from index.html (got ${orig.text.length} chars)`);
+  check(orig.text.length <= store.BIO_MAX, `the shipped bio is ${orig.text.length} chars, over BIO_MAX ${store.BIO_MAX} (Mercedes could not re-save it)`);
+  check(orig.tagline === "Style & Beauty · New York", `originalCopy reads the short line as "${orig.tagline}"`);
+  for (const [f, w, h, type] of [["public/assets/selfie.jpg", 1077, 1380, "jpeg"], ["public/assets/selfie.webp", 1077, 1380, "webp"], ["photos-src/selfie.png", 0, 0, "png"]]) {
+    const sz = store.imageSize(await readFile(join(ROOT, f)));
+    check(sz?.type === type && (w === 0 ? sz.w > 0 && sz.h > 0 : sz.w === w && sz.h === h), `imageSize(${f}) = ${JSON.stringify(sz)}, want ${type} ${w || "?"}x${h || "?"}`);
+  }
+  check(store.imageSize(new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16])) === null, "imageSize accepts a non-image");
+  check(store.key({ STORE_PREFIX: "preview/" }, "hero") === "preview/hero" && store.key({}, "hero") === "hero", "store key() does not apply STORE_PREFIX");
+
+  // Handlers exist.
+  const fns = {
+    "index.js": ["onRequest"], "bio.js": ["onRequestPost", "onRequestDelete"], "content.js": ["onRequestGet"], "og-image.jpg.js": ["onRequest"],
+  };
+  const mods = {};
+  for (const [f, names] of Object.entries(fns)) {
+    mods[f] = await import(`../functions/${f}`).catch((e) => ({ err: e }));
+    for (const n of names) check(typeof mods[f][n] === "function", `functions/${f} must export ${n}${mods[f].err ? ": " + mods[f].err.message : ""}`);
+  }
+  // The main page never breaks: R2 throwing, hanging, or missing -> the static page, untouched.
+  if (typeof mods["index.js"].onRequest === "function") {
+    const statics = () => new Response(indexHtml, { status: 200, headers: { "Content-Type": "text/html; charset=utf-8" } });
+    const run = (PHOTOS) => mods["index.js"].onRequest({ request: new Request("https://justbeingmercedes.com/"), env: { PHOTOS }, next: async () => statics(), waitUntil() {} });
+    for (const [name, PHOTOS, want] of [
+      ["R2 throws", { get: async () => { throw new Error("R2 down"); } }, "fallback"],
+      ["no binding", undefined, "fallback"],
+      ["R2 hangs", { get: () => new Promise(() => {}) }, "fallback"],
+      ["site.json corrupt", { get: async () => ({ text: async () => "{not json" }) }, "fallback"],
+      ["nothing changed", { get: async () => null }, "original"],
+    ]) {
+      const t0 = Date.now();
+      const r = await run(PHOTOS).catch((e) => ({ err: e }));
+      const body = r.err ? "" : await r.text();
+      check(!r.err && r.status === 200 && r.headers.get("X-Site-Content") === want && body === indexHtml && Date.now() - t0 < mods["index.js"].READ_TIMEOUT_MS + 1000,
+        `main page with ${name}: want the static page (${want}) promptly, got ${r.err ? r.err.message : r.status + " " + r.headers.get("X-Site-Content")} in ${Date.now() - t0} ms`);
+    }
+  }
+
+  // The upload page: bio card and a description field per photo, limits equal to the server's.
+  const up = await readFile(join(PUBLIC, "upload.html"), "utf8");
+  const attrOf = (html, re) => html.match(re)?.[1];
+  check(Number(attrOf(up, /<textarea id="bio"[^>]*maxlength="(\d+)"/)) === store.BIO_MAX, `upload.html #bio maxlength must be BIO_MAX ${store.BIO_MAX}`);
+  check(Number(attrOf(up, /<input id="tagline"[^>]*maxlength="(\d+)"/)) === store.TAGLINE_MAX, `upload.html #tagline maxlength must be TAGLINE_MAX ${store.TAGLINE_MAX}`);
+  check(/id="bio-count"/.test(up) && /id="bio-save"/.test(up) && /id="bio-reset"[^>]*>Back to original</.test(up), "upload.html bio card lacks its character count, Save or Back to original");
+  check(up.indexOf('id="bio-card"') > 0 && up.indexOf('id="bio-card"') < up.indexOf('class="card"'), "the bio card must come before the photo cards on /upload");
+  check(new RegExp(`up to ${store.BIO_MAX_PARAGRAPHS}\\)`).test(up), `upload.html bio hint must name the ${store.BIO_MAX_PARAGRAPHS}-paragraph limit`);
+  for (const slot of Object.keys(SLOTS)) {
+    const card = up.match(new RegExp(`<li class="card" data-slot="${slot}">([\\s\\S]*?)</li>`))?.[1] || "";
+    check(Number(attrOf(card, /<textarea id="alt-[\w-]+" name="alt"[^>]*maxlength="(\d+)"/)) === store.ALT_MAX && /Describe this photo/.test(card) && /screen readers/.test(card),
+      `upload card ${slot} has no "Describe this photo" field with maxlength ${store.ALT_MAX} and a screen-reader hint`);
+  }
+
+  // Previews never write production keys.
+  const toml = (await readFile(join(ROOT, "wrangler.toml"), "utf8")).replace(/#.*$/gm, "");
+  const [top, preview = ""] = toml.split(/^\[env\.preview/m).length > 1 ? [toml.split(/^\[env\./m)[0], toml.slice(toml.search(/^\[env\.preview/m))] : [toml];
+  check(!/STORE_PREFIX/.test(top), "wrangler.toml: production (top level) must not set STORE_PREFIX");
+  check(/^\[env\.preview\.vars\][^[]*STORE_PREFIX\s*=\s*"[\w-]+\/"/m.test(preview), "wrangler.toml: [env.preview.vars] must set STORE_PREFIX = \"<name>/\" so previews never touch live keys");
+  check(/\[\[env\.preview\.r2_buckets\]\][^[]*binding\s*=\s*"PHOTOS"/.test(preview), "wrangler.toml: previews need their own PHOTOS binding ([[env.preview.r2_buckets]])");
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, "http://x");
   const path = decodeURIComponent(url.pathname);
@@ -151,6 +236,7 @@ try {
             description: document.querySelector('meta[property="og:description"]')?.content,
           },
           favicon: !!document.querySelector('link[rel~="icon"]'),
+          bioText: [...document.querySelectorAll(".bio p")].map((p) => p.textContent.replace(/\s+/g, " ").trim()).join("\n\n"),
           scripts: [...document.querySelectorAll("script")].map((s) => s.src || "inline <script>"),
           localSrcs: [...document.querySelectorAll("img[src], source[srcset]")]
             .flatMap((e) => (e.getAttribute("src") || e.getAttribute("srcset")).split(",").map((c) => c.trim().split(/\s+/)[0]))
@@ -170,6 +256,17 @@ try {
           }),
         };
       });
+      // Every element functions/index.js rewrites exists, so an edit to the markup cannot orphan the rewriter.
+      for (const [name, sel] of Object.entries(store.SELECTORS)) {
+        const n = await page.locator(sel).count();
+        const want = ["bio", "tagline", "ogImage", "ogWidth", "ogHeight", "ogAlt", "heroPreload"].includes(name) ? n === 1 : n >= 1;
+        check(want, `rewriter selector ${name} (${sel}) matches ${n} elements in index.html`);
+      }
+      check(await page.locator(".bio > p").count() >= 1, ".bio must hold its text in <p> children (the rewriter replaces them)");
+      check(d.bioText === store.originalCopy(await readFile(join(PUBLIC, "index.html"), "utf8")).text, "originalCopy (what /upload shows as the original bio) differs from the bio the page shows");
+      for (const [slot, s] of Object.entries(SLOTS)) {
+        check(await page.locator(`.lb#${s.lightbox} img[src^="/photos/${slot}"]`).count() === 1, `slot ${slot}: lightbox #${s.lightbox} (slots.js) does not hold /photos/${slot}`);
+      }
       const mailto = d.hrefs.find((h) => h?.toLowerCase().startsWith(`mailto:${EMAIL}`));
       check(!!mailto, `no mailto link to ${EMAIL}`);
       check(!!mailto && /[?&]subject=/i.test(mailto), "the collab mailto has no subject line");
@@ -243,6 +340,16 @@ try {
       const w = await page.evaluate(() => document.documentElement.scrollWidth);
       check(w <= width, `${name}: horizontal scroll after using the gallery (${w}px)`);
     }
+    // The longest bio and short line /bio accepts must still fit the screen (Mercedes can save them).
+    await page.evaluate(([b, t]) => {
+      document.querySelector(".bio").innerHTML = b;
+      document.querySelector(".eyebrow").innerHTML = t;
+    }, [store.bioHtml(WORST_BIO), store.taglineHtml(WORST_TAGLINE)]);
+    await page.waitForTimeout(100);
+    const worst = await page.evaluate(() => ({ h: document.documentElement.scrollHeight, w: document.documentElement.scrollWidth, links: document.querySelector(".links")?.getBoundingClientRect().bottom ?? Infinity }));
+    check(worst.h <= maxH && worst.w <= width, `${name}: the longest allowed bio (${store.BIO_MAX} chars, ${store.BIO_MAX_PARAGRAPHS} paragraphs) makes the page ${worst.w}x${worst.h} (max ${width}x${maxH})`);
+    if (width > 760) check(worst.links <= height, `${name}: with the longest allowed bio the collab/social links end at ${Math.round(worst.links)}px, below the ${height}px screen`);
+    if (shots) await page.screenshot({ path: join(ROOT, "screenshots", `${name}-longest-bio.png`) });
     await page.close();
   }
 } finally {

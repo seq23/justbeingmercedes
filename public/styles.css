@@ -91,6 +91,9 @@ a:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; border-ra
   font-size: clamp(.95rem, 1.05vw + .35vh, 1.12rem); line-height: 1.62;
   color: var(--ink);
 }
+/* The bio is one or more paragraphs (Mercedes can edit it at /upload; each line becomes a <p>). */
+.bio p { margin: 0; }
+.bio p + p { margin-top: .5em; }
 /* Gallery: one row of up to 5 small tiles; 6-8 photos fall into a 4-across grid. */
 .gallery {
   list-style: none; margin: 0; padding: 0;
