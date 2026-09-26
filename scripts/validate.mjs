@@ -1,5 +1,7 @@
 // Validator for justbeingmercedes.com. Reads the real page in a real browser and fails loudly.
 // Run: npm run validate            (add --screenshots to also write screenshots/*.png)
+//      npm run validate:static     (the merge gate: everything before the browser opens; validate.yml)
+//      npm run screenshots         (the nightly e2e.yml: browser + screenshots, gates production)
 // Rule 0: it refuses to pass if it checked nothing (no images found, zero checks run).
 import { createServer } from "node:http";
 import { readFile, readdir, stat, mkdir } from "node:fs/promises";
@@ -190,6 +192,12 @@ const server = createServer(async (req, res) => {
 await new Promise((r) => server.listen(0, "127.0.0.1", r));
 const base = `http://127.0.0.1:${server.address().port}/`;
 
+// --static is the MERGE GATE (validate.yml): everything above ran without a browser — the image cap,
+// the email_off wrapping, the Functions' exports and slot wiring, the rendering helpers. The page-in-
+// Chromium checks below (one screen, no horizontal scroll, hero loads, links, alt text, lightboxes)
+// are the nightly `e2e.yml`, which gates production. Rule 0 still applies to the static half.
+if (process.argv.includes("--static")) { server.close(); finish("static checks only, no browser"); }
+
 const browser = await chromium.launch();
 const t0 = Date.now();
 const shots = process.argv.includes("--screenshots");
@@ -357,10 +365,15 @@ try {
   server.close();
 }
 
-if (checks === 0) { console.error("validate: FAIL, zero checks ran (Rule 0)"); process.exit(1); }
-if (failures.length) {
-  console.error(`validate: FAIL, ${failures.length} of ${checks} checks failed`);
-  for (const f of failures) console.error("  - " + f);
-  process.exit(1);
+finish(`${VIEWPORTS.length} viewports`);
+
+function finish(scope) {
+  if (checks === 0) { console.error("validate: FAIL, zero checks ran (Rule 0)"); process.exit(1); }
+  if (failures.length) {
+    console.error(`validate: FAIL, ${failures.length} of ${checks} checks failed`);
+    for (const f of failures) console.error("  - " + f);
+    process.exit(1);
+  }
+  console.log(`validate: PASS, ${checks} checks (${images.length} image files, ${scope})`);
+  process.exit(0);
 }
-console.log(`validate: PASS, ${checks} checks (${images.length} image files, ${VIEWPORTS.length} viewports)`);

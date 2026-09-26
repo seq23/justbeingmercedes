@@ -1,19 +1,44 @@
 name: Deploy
-# Push to main deploys public/ to the Cloudflare Pages project justbeingmercedes (justbeingmercedes.com).
-# Needs repo secrets CLOUDFLARE_API_TOKEN (Pages: Edit) and CLOUDFLARE_ACCOUNT_ID.
+# Direct Upload of public/ to the Cloudflare Pages project justbeingmercedes. Needs repo secrets
+# CLOUDFLARE_API_TOKEN (Pages: Edit) and CLOUDFLARE_ACCOUNT_ID.
+#
+# Build first, test in batches (26 Sep 2026) — two targets, one workflow:
+#   · STAGING on every push to `main`: `--branch staging` → https://staging.justbeingmercedes.pages.dev.
+#     A preview deployment, so wrangler.toml's [env.preview] applies (STORE_PREFIX=preview/): it
+#     never shows or touches Mercedes' real uploads.
+#   · PRODUCTION (justbeingmercedes.com) only from a sha the browser checks passed: `e2e.yml`
+#     runs nightly + on dispatch; on its success this fires and publishes exactly that sha with
+#     `--branch main`. workflow_dispatch takes a sha (default main's head) and is REFUSED unless a
+#     green e2e run exists on it — run `gh workflow run e2e.yml --ref main` first.
+# A red e2e fires this too and is turned away by the `if` below: production stays put.
 on:
   push:
     branches: [main]
+  workflow_run:
+    workflows: [e2e]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
+    inputs:
+      sha:
+        description: "Commit to publish to production (default: main's head). Must have a green e2e run."
+        required: false
+        default: ""
 concurrency:
-  group: deploy-production
+  group: deploy-${{ github.event_name == 'push' && 'staging' || 'production' }}
   cancel-in-progress: false
 jobs:
   deploy:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read # reads e2e runs for the dispatch check
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Refuse to run without the deploy token (named stop)
         env:
           HAS_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
@@ -22,8 +47,32 @@ jobs:
             echo "::error::NAMED STOP: repo secret CLOUDFLARE_API_TOKEN (Pages: Edit) is missing. Deploy with 'npm run deploy' until it is added."
             exit 1
           fi
+      - name: Pick the target and the sha
+        id: pick
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+          INPUT_SHA: ${{ github.event.inputs.sha }}
+        run: |
+          set -euo pipefail
+          case "${{ github.event_name }}" in
+            push) echo "target=staging" >> "$GITHUB_OUTPUT"; echo "sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT" ;;
+            workflow_run) echo "target=production" >> "$GITHUB_OUTPUT"; echo "sha=$RUN_SHA" >> "$GITHUB_OUTPUT" ;;
+            workflow_dispatch)
+              sha="$(git rev-parse "${INPUT_SHA:-origin/main}")"
+              green="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/e2e.yml/runs?head_sha=$sha&status=success&per_page=1" --jq '.workflow_runs | length')"
+              if [ "$green" != 1 ]; then
+                echo "::error::REFUSED: no successful e2e run on $sha. Run it first: gh workflow run e2e.yml --ref main"
+                exit 1
+              fi
+              echo "target=production" >> "$GITHUB_OUTPUT"; echo "sha=$sha" >> "$GITHUB_OUTPUT" ;;
+          esac
+      - name: Check out exactly that sha
+        run: git checkout -q "${{ steps.pick.outputs.sha }}"
       - uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy public --project-name justbeingmercedes --branch main --commit-dirty=true
+          command: pages deploy public --project-name justbeingmercedes --branch ${{ steps.pick.outputs.target == 'production' && 'main' || 'staging' }} --commit-dirty=true
+      - name: Say what shipped
+        run: echo "${{ steps.pick.outputs.target }} <- ${{ steps.pick.outputs.sha }}" >> "$GITHUB_STEP_SUMMARY"
