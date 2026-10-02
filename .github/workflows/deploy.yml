@@ -6,10 +6,20 @@ name: Deploy
 #   · STAGING on every push to `main`: `--branch staging` → https://staging.justbeingmercedes.pages.dev.
 #     A preview deployment, so wrangler.toml's [env.preview] applies (STORE_PREFIX=preview/): it
 #     never shows or touches Mercedes' real uploads.
-#   · PRODUCTION (justbeingmercedes.com) only from a sha the browser checks passed: `e2e.yml`
-#     runs on dispatch only (a person or `land` after a large change; never a schedule); on its success this fires and publishes exactly that sha with
-#     `--branch main`. workflow_dispatch takes a sha (default main's head) and is REFUSED unless a
-#     green e2e run exists on it — run `gh workflow run e2e.yml --ref main` first.
+#   · PRODUCTION (justbeingmercedes.com, `--branch main`) only for a sha the production gate
+#     passes — `scripts/production-gate.mjs`, run here for EVERY production path; this file
+#     restates none of it (owner decision 2 Oct 2026: a small change ships on the fast check; the
+#     browser checks gate production only after a large change or when asked):
+#       - workflow_run on `e2e` success: the sha that run passed. The path after a LARGE change —
+#         `land` dispatches `e2e.yml` (dispatch only, never a schedule) and its green fires this.
+#       - workflow_dispatch with a sha and a `reason`: the path for a SMALL change. `land <pr>`
+#         dispatches this with its small-change verdict; the gate then requires the fast check
+#         (`validate.yml`) green on exactly that sha and the browser checks not known red on main.
+#       - workflow_dispatch with a sha and no reason: REFUSED unless a completed `e2e` run on
+#         that exact sha concluded success.
+#     "Large" is defined once, in the `large` block of `land` (seq23/seq-bin) — not here.
+#     Every production publish records a GitHub Deployment (environment `production`): what
+#     `land` reads back to know what production runs.
 # A red e2e fires this too and is turned away by the `if` below: production stays put.
 on:
   push:
@@ -21,7 +31,11 @@ on:
   workflow_dispatch:
     inputs:
       sha:
-        description: "Commit to publish to production (default: main's head). Must have a green e2e run."
+        description: "Commit to publish to production (default: main's head)."
+        required: false
+        default: ""
+      reason:
+        description: "Why it may ship without a green e2e run on it: land's small-change verdict (`land <pr>` passes it). Empty = a green e2e run on the sha is required."
         required: false
         default: ""
 concurrency:
@@ -34,7 +48,8 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
-      actions: read # reads e2e runs for the dispatch check
+      actions: read # the gate reads e2e and validate runs
+      deployments: write # the production record `land` reads
     steps:
       - uses: actions/checkout@v4
         with:
@@ -47,26 +62,23 @@ jobs:
             echo "::error::NAMED STOP: repo secret CLOUDFLARE_API_TOKEN (Pages: Edit) is missing. Deploy with 'npm run deploy' until it is added."
             exit 1
           fi
-      - name: Pick the target and the sha
+      - name: Pick the target and the sha; a production sha must pass the production gate
         id: pick
         env:
           GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
           RUN_SHA: ${{ github.event.workflow_run.head_sha }}
           INPUT_SHA: ${{ github.event.inputs.sha }}
+          REASON: ${{ github.event.inputs.reason }}
         run: |
           set -euo pipefail
-          case "${{ github.event_name }}" in
-            push) echo "target=staging" >> "$GITHUB_OUTPUT"; echo "sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT" ;;
-            workflow_run) echo "target=production" >> "$GITHUB_OUTPUT"; echo "sha=$RUN_SHA" >> "$GITHUB_OUTPUT" ;;
-            workflow_dispatch)
-              sha="$(git rev-parse "${INPUT_SHA:-origin/main}")"
-              green="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/e2e.yml/runs?head_sha=$sha&status=success&per_page=1" --jq '.workflow_runs | length')"
-              if [ "$green" != 1 ]; then
-                echo "::error::REFUSED: no successful e2e run on $sha. Run it first: gh workflow run e2e.yml --ref main"
-                exit 1
-              fi
-              echo "target=production" >> "$GITHUB_OUTPUT"; echo "sha=$sha" >> "$GITHUB_OUTPUT" ;;
-          esac
+          if [ "$EVENT" = push ]; then
+            echo "target=staging" >> "$GITHUB_OUTPUT"; echo "sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if [ "$EVENT" = workflow_run ]; then sha="$RUN_SHA"; else sha="$(git rev-parse "${INPUT_SHA:-origin/main}")"; fi
+          git merge-base --is-ancestor "$sha" origin/main || { echo "::error::$sha is not on main"; exit 1; }
+          SHA="$sha" node scripts/production-gate.mjs | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "target=production" >> "$GITHUB_OUTPUT"; echo "sha=$sha" >> "$GITHUB_OUTPUT"
       - name: Check out exactly that sha
         run: git checkout -q "${{ steps.pick.outputs.sha }}"
       - uses: cloudflare/wrangler-action@v3
@@ -76,3 +88,19 @@ jobs:
           command: pages deploy public --project-name justbeingmercedes --branch ${{ steps.pick.outputs.target == 'production' && 'main' || 'staging' }} --commit-dirty=true
       - name: Say what shipped
         run: echo "${{ steps.pick.outputs.target }} <- ${{ steps.pick.outputs.sha }}" >> "$GITHUB_STEP_SUMMARY"
+      # One GitHub Deployment per production publish (environment `production`): the record `land`
+      # reads back after it dispatches this workflow, and reads first to judge what production has
+      # not seen. Staging publishes record nothing.
+      - name: Record the production deployment
+        if: steps.pick.outputs.target == 'production'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ steps.pick.outputs.sha }}
+          NOTE: ${{ steps.pick.outputs.note }}
+        run: |
+          set -euo pipefail
+          id="$(jq -n --arg ref "$SHA" --arg d "deploy.yml: $NOTE" '{ref: $ref, environment: "production", auto_merge: false, required_contexts: [], description: $d[0:140], production_environment: true}' \
+                 | gh api -X POST "repos/${GITHUB_REPOSITORY}/deployments" --input - --jq .id)"
+          jq -n --arg d "deploy.yml: $NOTE" '{state: "success", environment: "production", description: $d[0:140], environment_url: "https://justbeingmercedes.com"}' \
+                 | gh api -X POST "repos/${GITHUB_REPOSITORY}/deployments/$id/statuses" --input - >/dev/null
+          echo "recorded: GitHub deployment $id — production = $SHA" | tee -a "$GITHUB_STEP_SUMMARY"

@@ -3,10 +3,16 @@
 # about a minute, no browser. It is the run ~/bin/land watches on `main`.
 #
 # Build first, test in batches (26 Sep 2026): the page-in-Chromium checks (`npm run screenshots`)
-# are NOT here. They run on dispatch only in `e2e.yml` (never a schedule) and gate PRODUCTION, not the merge:
-# `deploy.yml` publishes every push to `main` as the staging preview
-# (https://staging.justbeingmercedes.pages.dev) and publishes justbeingmercedes.com only from a sha
-# `e2e` has passed. `scripts/validate-workflows.mjs` fails this run if the browser step comes back.
+# are NOT here. They run on dispatch only in `e2e.yml` (never a schedule): `deploy.yml` publishes
+# every push to `main` as the staging preview (https://staging.justbeingmercedes.pages.dev) and
+# publishes justbeingmercedes.com through the production gate.
+#
+# THIS RUN IS WHAT A SMALL CHANGE SHIPS ON (owner decision 2 Oct 2026): `land <pr>` sends a small
+# change to production once this run is green on the merge commit; the browser checks gate
+# production only after a large change (land defines "large", in seq23/seq-bin) or when asked.
+# The rule is `scripts/production-gate.mjs`; its self-test runs below.
+# `scripts/validate-workflows.mjs` fails this run if the browser step comes back, or if deploy.yml
+# stops going through the gate.
 name: Validate
 on:
   pull_request:
@@ -30,7 +36,9 @@ jobs:
       - run: npm ci --ignore-scripts
       - name: Static checks (no browser)
         run: npm run validate:static
-      - name: The browser checks are dispatch only, never per merge; production only from an e2e-green sha
+      - name: The browser checks are dispatch only, never per merge; production only through the production gate
         run: npm run validate:workflows
+      - name: The production gate decides every case correctly, and five broken gates are caught
+        run: npm run validate:gate
       - name: Upload backend end-to-end (wrangler pages dev + local R2)
         run: npm test
