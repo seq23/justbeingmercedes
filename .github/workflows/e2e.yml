@@ -1,18 +1,17 @@
 # The page in a real browser (Chromium at 1440x900, 1280x800 and a 390x844 phone): one screen, no
-# horizontal scroll, hero loads, links, alt text, lightboxes — plus screenshots. Nightly and on
-# demand, never per merge.
+# horizontal scroll, hero loads, links, alt text, lightboxes — plus screenshots. On demand ONLY,
+# never on a schedule (owner decision, 2 Oct 2026), never per merge.
 #
-# Build first, test in batches (26 Sep 2026). The merge gate is `validate.yml` (static checks, the
-# upload e2e, guards). This runs on main's head once a night and whenever dispatched; on success
-# `deploy.yml` publishes exactly this sha to justbeingmercedes.com. A red nightly leaves production
+# Build first, test in batches. The merge gate is `validate.yml` (static checks, the upload e2e,
+# guards). This runs only when dispatched: by a person (`gh workflow run e2e.yml --ref main`) or by
+# `land` after a large change (the `land` PR in seq23/seq-bin defines "large"); on success
+# `deploy.yml` publishes exactly this sha to justbeingmercedes.com. A red run leaves production
 # where it is and is fixed first. `timeout-minutes` is a fault detector (~4x normal), never a budget.
 #
-# NOT `push`, NOT `pull_request`: scripts/validate-workflows.mjs fails the merge gate if either
-# trigger comes back.
+# NOT `push`, NOT `pull_request`, NOT `schedule`: scripts/validate-workflows.mjs fails the merge
+# gate if any of them comes back.
 name: e2e
 on:
-  schedule:
-    - cron: "20 8 * * *" # nightly 08:20 UTC (03:20 CT), main's head
   workflow_dispatch:
 concurrency:
   group: e2e-${{ github.ref }}

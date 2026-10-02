@@ -3,7 +3,7 @@
 # about a minute, no browser. It is the run ~/bin/land watches on `main`.
 #
 # Build first, test in batches (26 Sep 2026): the page-in-Chromium checks (`npm run screenshots`)
-# are NOT here. They run nightly and on dispatch in `e2e.yml` and gate PRODUCTION, not the merge:
+# are NOT here. They run on dispatch only in `e2e.yml` (never a schedule) and gate PRODUCTION, not the merge:
 # `deploy.yml` publishes every push to `main` as the staging preview
 # (https://staging.justbeingmercedes.pages.dev) and publishes justbeingmercedes.com only from a sha
 # `e2e` has passed. `scripts/validate-workflows.mjs` fails this run if the browser step comes back.
@@ -30,7 +30,7 @@ jobs:
       - run: npm ci --ignore-scripts
       - name: Static checks (no browser)
         run: npm run validate:static
-      - name: The browser checks are nightly, never per merge; production only from an e2e-green sha
+      - name: The browser checks are dispatch only, never per merge; production only from an e2e-green sha
         run: npm run validate:workflows
       - name: Upload backend end-to-end (wrangler pages dev + local R2)
         run: npm test
