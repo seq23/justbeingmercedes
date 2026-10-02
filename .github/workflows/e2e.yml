@@ -4,9 +4,12 @@
 #
 # Build first, test in batches. The merge gate is `validate.yml` (static checks, the upload e2e,
 # guards). This runs only when dispatched: by a person (`gh workflow run e2e.yml --ref main`) or by
-# `land` after a large change (the `land` PR in seq23/seq-bin defines "large"); on success
-# `deploy.yml` publishes exactly this sha to justbeingmercedes.com. A red run leaves production
-# where it is and is fixed first. `timeout-minutes` is a fault detector (~4x normal), never a budget.
+# `land` after a large change (the `large` block of `land` in seq23/seq-bin defines "large"); on
+# success `deploy.yml` publishes exactly this sha to justbeingmercedes.com. A SMALL change ships
+# on the fast check without this run (owner decision 2 Oct 2026; `land <pr>` dispatches
+# `deploy.yml` with its verdict, `scripts/production-gate.mjs` checks it). A red run here leaves
+# production where it is, BLOCKS every small change until a green run is newer (known red), and
+# is fixed first. `timeout-minutes` is a fault detector (~4x normal), never a budget.
 #
 # NOT `push`, NOT `pull_request`, NOT `schedule`: scripts/validate-workflows.mjs fails the merge
 # gate if any of them comes back.

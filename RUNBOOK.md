@@ -32,13 +32,19 @@ CSS only, no JavaScript. Each tile links to `#photo-<slug>`; the matching `.lb` 
 Change the `mailto:` href and the visible `.addr` text in `public/index.html`, and `EMAIL` in `scripts/validate.mjs`. The address is the one on her TikTok and Linktree bios. Keep it inside the `<!--email_off-->` … `<!--/email_off-->` comments and nowhere else on the page: the zone has Cloudflare email obfuscation on, which otherwise rewrites the mailto into a `/cdn-cgi/` link plus a script (the validator fails if you forget).
 
 ## Deploy (build first, test in batches — 26 Sep 2026)
-- **Merge gate** = `.github/workflows/validate.yml` on every PR and push to `main`: `npm run validate:static` (no browser), `npm run validate:workflows`, `npm test`. `~/bin/land <pr>` merges on green.
+- **Merge gate** = `.github/workflows/validate.yml` on every PR and push to `main`: `npm run validate:static` (no browser), `npm run validate:workflows`, `npm run validate:gate`, `npm test`. `~/bin/land <pr>` merges on green.
 - **Staging**: every push to `main` → **Deploy** publishes `public/` as the `staging` preview, https://staging.justbeingmercedes.pages.dev (preview env, `STORE_PREFIX=preview/`, never her real uploads).
-- **Production** (justbeingmercedes.com): `.github/workflows/e2e.yml` runs the browser checks (`npm run screenshots`) on dispatch only — a person or `land` after a large change, never on a schedule (owner, 2 Oct 2026); on success **Deploy** publishes exactly that sha with `--branch main`. By hand: `gh workflow run e2e.yml --ref main` (green → Deploy fires), or `gh workflow run deploy.yml -f sha=<sha>` for a sha that already has a green e2e run (refused otherwise).
+- **Production** (justbeingmercedes.com): **Deploy** publishes a sha with `--branch main` only when `scripts/production-gate.mjs` passes it (owner, 2 Oct 2026):
+  - **A small change ships on the fast check.** `~/bin/land <pr>` merges, sees Validate green on the merge commit, and dispatches Deploy with the sha and its reason ("small change: N lines, M files; shipped on the fast check, e2e on demand"). The gate requires Validate green on exactly that sha and the browser checks not known red.
+  - **A large change needs green browser checks.** `land` measures the change — and every commit production has not seen — and, when one is large, dispatches `.github/workflows/e2e.yml` (`npm run screenshots`) on `main` itself; its success fires Deploy for that sha. **"Large" is defined once, in the `large` block of `land` (seq23/seq-bin, `~/bin/land`); nothing here restates it.**
+  - **Known red blocks.** If the newest e2e run on `main` that reached a verdict (cancelled and skipped runs do not count) is not `success`, no small change ships until a green run is newer.
+  - `e2e.yml` runs on dispatch only, never on a schedule: a person (`gh workflow run e2e.yml --ref main`), `land <pr> --run-e2e`, or `land` after a large change.
+  - Each production publish records a GitHub Deployment (environment `production`): `gh api "repos/seq23/justbeingmercedes/deployments?environment=production&per_page=1" --jq '.[0].sha'` is what production runs.
+  - By hand: `gh workflow run e2e.yml --ref main` (green → Deploy fires), or `gh workflow run deploy.yml -f sha=<sha>` for a sha that already has a green e2e run. Without one, Deploy refuses unless it is given `-f reason=` — that is `land`'s call to make.
 - A red e2e run leaves production where it is; fix `main` first. Break-glass: `npm run deploy` (wrangler logged in to account 8d147e242033699dd37c6f5a451f48d2).
 - Token: repo secret `CLOUDFLARE_API_TOKEN` is the vault credential `cloudflare-claude-deploy`; `CLOUDFLARE_ACCOUNT_ID` is the account id above. If Deploy fails with an auth error, re-set the secret from the vault (value never printed) or deploy by hand.
 
 ## Check the deploy
-- `gh run list -R seq23/justbeingmercedes --branch main` — Validate and Deploy (staging) green on the merge; e2e and Deploy (production) green after the last dispatched e2e run.
+- `gh run list -R seq23/justbeingmercedes --branch main` — Validate and Deploy (staging) green on the merge; Deploy (production, `workflow_dispatch` from `land` for a small change, `workflow_run` after a green e2e for a large one) green after it.
 - `curl -sI https://justbeingmercedes.com` → `200`; `curl -s https://justbeingmercedes.com | grep -c "Just Being Mercedes"` → non-zero.
 - `https://www.justbeingmercedes.com` serves the same page (both are custom domains on the Pages project; DNS CNAMEs → `justbeingmercedes.pages.dev`, proxied).
