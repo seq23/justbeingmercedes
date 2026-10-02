@@ -34,11 +34,11 @@ Change the `mailto:` href and the visible `.addr` text in `public/index.html`, a
 ## Deploy (build first, test in batches — 26 Sep 2026)
 - **Merge gate** = `.github/workflows/validate.yml` on every PR and push to `main`: `npm run validate:static` (no browser), `npm run validate:workflows`, `npm test`. `~/bin/land <pr>` merges on green.
 - **Staging**: every push to `main` → **Deploy** publishes `public/` as the `staging` preview, https://staging.justbeingmercedes.pages.dev (preview env, `STORE_PREFIX=preview/`, never her real uploads).
-- **Production** (justbeingmercedes.com): `.github/workflows/e2e.yml` runs the browser checks (`npm run screenshots`) nightly 08:20 UTC + on dispatch; on success **Deploy** publishes exactly that sha with `--branch main`. By hand: `gh workflow run e2e.yml --ref main` (green → Deploy fires), or `gh workflow run deploy.yml -f sha=<sha>` for a sha that already has a green e2e run (refused otherwise).
-- A red nightly leaves production where it is; fix `main` first. Break-glass: `npm run deploy` (wrangler logged in to account 8d147e242033699dd37c6f5a451f48d2).
+- **Production** (justbeingmercedes.com): `.github/workflows/e2e.yml` runs the browser checks (`npm run screenshots`) on dispatch only — a person or `land` after a large change, never on a schedule (owner, 2 Oct 2026); on success **Deploy** publishes exactly that sha with `--branch main`. By hand: `gh workflow run e2e.yml --ref main` (green → Deploy fires), or `gh workflow run deploy.yml -f sha=<sha>` for a sha that already has a green e2e run (refused otherwise).
+- A red e2e run leaves production where it is; fix `main` first. Break-glass: `npm run deploy` (wrangler logged in to account 8d147e242033699dd37c6f5a451f48d2).
 - Token: repo secret `CLOUDFLARE_API_TOKEN` is the vault credential `cloudflare-claude-deploy`; `CLOUDFLARE_ACCOUNT_ID` is the account id above. If Deploy fails with an auth error, re-set the secret from the vault (value never printed) or deploy by hand.
 
 ## Check the deploy
-- `gh run list -R seq23/justbeingmercedes --branch main` — Validate and Deploy (staging) green on the merge; e2e and Deploy (production) green after the nightly.
+- `gh run list -R seq23/justbeingmercedes --branch main` — Validate and Deploy (staging) green on the merge; e2e and Deploy (production) green after the last dispatched e2e run.
 - `curl -sI https://justbeingmercedes.com` → `200`; `curl -s https://justbeingmercedes.com | grep -c "Just Being Mercedes"` → non-zero.
 - `https://www.justbeingmercedes.com` serves the same page (both are custom domains on the Pages project; DNS CNAMEs → `justbeingmercedes.pages.dev`, proxied).

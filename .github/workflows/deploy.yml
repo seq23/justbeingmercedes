@@ -7,7 +7,7 @@ name: Deploy
 #     A preview deployment, so wrangler.toml's [env.preview] applies (STORE_PREFIX=preview/): it
 #     never shows or touches Mercedes' real uploads.
 #   · PRODUCTION (justbeingmercedes.com) only from a sha the browser checks passed: `e2e.yml`
-#     runs nightly + on dispatch; on its success this fires and publishes exactly that sha with
+#     runs on dispatch only (a person or `land` after a large change; never a schedule); on its success this fires and publishes exactly that sha with
 #     `--branch main`. workflow_dispatch takes a sha (default main's head) and is REFUSED unless a
 #     green e2e run exists on it — run `gh workflow run e2e.yml --ref main` first.
 # A red e2e fires this too and is turned away by the `if` below: production stays put.
