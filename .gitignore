@@ -1,2 +1,6 @@
 node_modules
 node_modules/
+
+# Wrangler local state and QA screenshots
+.wrangler/
+screenshots/
