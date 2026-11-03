@@ -9,15 +9,18 @@ import { deflateSync, crc32 } from "node:zlib";
 import { readFile } from "node:fs/promises";
 import { SLOTS } from "../functions/_lib/slots.js";
 import { FALLBACK_ALT, originalCopy } from "../functions/_lib/store.js";
-import { COOKIE, mintPairing } from "../functions/_lib/device.js";
+import { COOKIE, mintLogin } from "../functions/_lib/session.js";
+import { LINKS_PER_HOUR } from "../functions/login/email.js";
+import { createServer } from "node:http";
 import { WRITES_PER_HOUR } from "../functions/_lib/guard.js";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const PORT = 8700 + Math.floor(Math.random() * 200);
 const BASE = `http://127.0.0.1:${PORT}`;
-// A paired device's write: same-site Origin + the device cookie (filled in by the pairing step below).
+// A signed-in write: same-site Origin + the session cookie (filled in by the login step below).
 const AUTH = { Origin: BASE };
-const SECRET = "e2e-device-secret";
+const SECRET = "e2e-session-secret";
+const OWNER = "owner@example.test";
 const DAY_CAP = 40; // passed as WRITES_PER_DAY so the whole-site cap is reachable in a test
 let checks = 0;
 const failures = [];
@@ -38,7 +41,7 @@ function png() {
 const form = (slot, bytes, type, name = "t.png") => {
   const f = new FormData(); f.append("slot", slot); f.append("file", new Blob([bytes], { type }), name); return f;
 };
-// Every request carrying the device cookie and the same-site Origin is an accepted write and counts toward the limits.
+// Every request carrying the session cookie and the same-site Origin is an accepted write and counts toward the limits.
 let writes = 0;
 const get = (path, init = {}) => {
   if (init.headers?.Origin && AUTH.Cookie && init.headers.Cookie === AUTH.Cookie) writes++;
@@ -56,9 +59,18 @@ const page = async () => {
 const tileRe = (slot) => new RegExp(`<img src="/photos/${slot}\\?size=thumb[^"]*"[^>]*>`);
 const fullRe = (slot) => new RegExp(`<img class="lb-full" src="/photos/${slot}(\\?[^"]*)?"[^>]*>`);
 
+// A stand-in for Resend: records every email the site asks it to send; nothing leaves this machine.
+const outbox = [];
+const mock = createServer((req, res) => {
+  let body = ""; req.on("data", (d) => (body += d));
+  req.on("end", () => { outbox.push({ auth: req.headers.authorization, ...JSON.parse(body || "{}") }); res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ id: `mock-${outbox.length}` })); });
+});
+await new Promise((r) => mock.listen(0, "127.0.0.1", r));
+const MOCK_URL = `http://127.0.0.1:${mock.address().port}/emails`;
 const persist = await mkdtemp(join(tmpdir(), "jbm-r2-"));
 const dev = spawn("npx", ["wrangler", "pages", "dev", "public", "--ip", "127.0.0.1", "--port", String(PORT), "--persist-to", persist,
-  "--binding", `DEVICE_SECRET=${SECRET}`, "--binding", `WRITES_PER_DAY=${DAY_CAP}`],
+  "--binding", `SESSION_SECRET=${SECRET}`, "--binding", `OWNER_EMAIL=${OWNER}`,
+  "--binding", "RESEND_API_KEY=e2e-key", "--binding", `RESEND_API_URL=${MOCK_URL}`, "--binding", `WRITES_PER_DAY=${DAY_CAP}`],
   { cwd: ROOT, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, WRANGLER_SEND_METRICS: "false", CI: "true" } });
 let log = "";
 dev.stdout.on("data", (d) => (log += d)); dev.stderr.on("data", (d) => (log += d));
@@ -83,36 +95,58 @@ try {
   check(r.status === 200 && /Change your page[\s\S]*Your bio[\s\S]*Describe this photo/.test(await r.text()), "GET /upload serves the page with the bio card and photo descriptions");
 
   const img = png();
-  // ---- Device pairing: no write without the year-long device cookie ----
+  // ---- Emailed one-time login: no write without the session cookie ----
   r = await get("/upload", { method: "POST", body: form(slot, img, "image/png") });
-  check(r.status === 401, `POST with no device cookie -> 401 (got ${r.status})`);
+  check(r.status === 401, `POST with no session -> 401 (got ${r.status})`);
   r = await get("/upload", { method: "POST", headers: { Origin: BASE }, body: form(slot, img, "image/png") });
   check(r.status === 401, `POST with a forged same-site Origin alone -> 401 (got ${r.status})`);
-  r = await get("/bio", { method: "DELETE", headers: { Origin: BASE, Cookie: `${COOKIE}=d1.AAAAAAAAAAAAAAAAAAAAAAAA.99999999999999.AAAA` } });
-  check(r.status === 401, `DELETE /bio with a made-up device cookie -> 401 (got ${r.status})`);
-  check((await (await get("/content")).json()).paired === false, "GET /content says this browser is not paired");
-  r = await get("/pair?t=p1.AAAAAAAAAAAAAAAAAAAAAAAA.99999999999999.AAAA");
-  check(r.status === 410, `a forged pairing link -> 410 (got ${r.status})`);
-  r = await get(`/pair?t=${await mintPairing("not-the-secret")}`);
-  check(r.status === 410, `a pairing link signed with another key -> 410 (got ${r.status})`);
-  r = await get(`/pair?t=${await mintPairing(SECRET, Date.now() - 31 * 86_400_000)}`);
-  check(r.status === 410, `an expired pairing link -> 410 (got ${r.status})`);
-  const pairToken = await mintPairing(SECRET);
-  r = await get(`/pair?t=${pairToken}`);
-  check(r.status === 200 && !r.headers.get("set-cookie") && /<form method="post" action="\/pair">/.test(await r.text()), "GET /pair shows the Pair button and sets no cookie (link previews cannot use it up)");
-  r = await get(`/pair?t=${pairToken}`);
-  check(r.status === 200, `GET /pair twice still works (got ${r.status})`);
-  const pairForm = () => { const f = new FormData(); f.append("t", pairToken); return f; };
-  r = await get("/pair", { method: "POST", body: pairForm() });
+  r = await get("/bio", { method: "DELETE", headers: { Origin: BASE, Cookie: `${COOKIE}=s1.AAAAAAAAAAAAAAAAAAAAAAAA.99999999999999.AAAA` } });
+  check(r.status === 401, `DELETE /bio with a made-up session cookie -> 401 (got ${r.status})`);
+  check((await (await get("/content")).json()).signedIn === false, "GET /content says this browser is signed out");
+
+  r = await get("/login/email", { method: "POST" });
+  check(r.status === 403 && outbox.length === 0, `"Email me a login link" from another site -> 403, nothing sent (got ${r.status}, ${outbox.length} sent)`);
+  r = await get("/login/email", { method: "POST", headers: { Origin: BASE, "Content-Type": "application/json" }, body: JSON.stringify({ to: "attacker@evil.test", email: "attacker@evil.test", OWNER_EMAIL: "attacker@evil.test" }) });
+  const sent = await r.json().catch(() => ({}));
+  const mail = outbox[0] || {};
+  check(r.status === 200 && sent.sent === true && /^Sent to o•••@example\.test\./.test(sent.message || ""), `"Email me a login link" -> 200 sent, masked address (got ${r.status} ${sent.message})`);
+  check(outbox.length === 1 && JSON.stringify(mail.to) === JSON.stringify([OWNER]) && !JSON.stringify(mail).includes("evil.test"), `exactly one email, to OWNER_EMAIL only, whatever the request asks (to=${JSON.stringify(mail.to)})`);
+  check(mail.auth === "Bearer e2e-key" && /@justbeingmercedes\.com>$/.test(mail.from || ""), `sent with the site's key from her own domain (from=${mail.from})`);
+  const link = (mail.text || "").match(/https?:\/\/\S+\/login\?t=\S+/)?.[0] || "";
+  check(link.startsWith(`${BASE}/login?t=l1.`) && (mail.html || "").includes(link), `the email carries a one-time login link (${link.slice(0, 40)}…)`);
+  const loginToken = new URL(link || BASE).searchParams.get("t") || "";
+
+  r = await get("/login?t=l1.AAAAAAAAAAAAAAAAAAAAAAAA.99999999999999.AAAA");
+  check(r.status === 410, `a forged login link -> 410 (got ${r.status})`);
+  r = await get(`/login?t=${await mintLogin("not-the-secret")}`);
+  check(r.status === 410, `a login link signed with another key -> 410 (got ${r.status})`);
+  r = await get(`/login?t=${await mintLogin(SECRET, Date.now() - 16 * 60_000)}`);
+  check(r.status === 410, `a login link older than 15 minutes -> 410 (got ${r.status})`);
+  r = await get(`/login?t=${loginToken}`);
+  check(r.status === 200 && !r.headers.get("set-cookie") && /<form method="post" action="\/login">/.test(await r.text()), "GET /login shows the Sign in button and sets no cookie (link previews cannot use it up)");
+  r = await get(`/login?t=${loginToken}`);
+  check(r.status === 200, `GET /login twice still works (got ${r.status})`);
+  const loginForm = () => { const f = new FormData(); f.append("t", loginToken); return f; };
+  r = await get("/login", { method: "POST", body: loginForm() });
   const setCookie = r.headers.get("set-cookie") || "";
-  check(r.status === 303 && r.headers.get("location") === "/upload", `POST /pair -> 303 /upload (got ${r.status} ${r.headers.get("location")})`);
-  check(/HttpOnly/.test(setCookie) && /Secure/.test(setCookie) && /SameSite=Strict/.test(setCookie) && /Max-Age=31536000/.test(setCookie), `the device cookie is HttpOnly, Secure, SameSite=Strict, one year (${setCookie.replace(/=d1\.[^;]+/, "=…")})`);
+  check(r.status === 303 && r.headers.get("location") === "/upload", `POST /login -> 303 /upload (got ${r.status} ${r.headers.get("location")})`);
+  check(/HttpOnly/.test(setCookie) && /Secure/.test(setCookie) && /SameSite=Lax/.test(setCookie) && /Max-Age=7776000/.test(setCookie), `the session cookie is HttpOnly, Secure, SameSite=Lax, 90 days (${setCookie.replace(/=s1\.[^;]+/, "=…")})`);
   AUTH.Cookie = setCookie.split(";")[0];
-  r = await get("/pair", { method: "POST", body: pairForm() });
-  check(r.status === 410 && !r.headers.get("set-cookie"), `the same pairing link a second time -> 410, no cookie (got ${r.status})`);
-  check((await (await get("/content", { headers: { Cookie: AUTH.Cookie } })).json()).paired === true, "GET /content says the paired browser is paired");
+  r = await get("/login", { method: "POST", body: loginForm() });
+  check(r.status === 410 && !r.headers.get("set-cookie"), `the same login link a second time -> 410, no cookie (got ${r.status})`);
+  check((await (await get("/content", { headers: { Cookie: AUTH.Cookie } })).json()).signedIn === true, "GET /content says the signed-in browser is signed in");
+
+  // "Email me a login link": LINKS_PER_HOUR for the whole site, then 429 and nothing sent.
+  let k = 1;
+  for (; k < LINKS_PER_HOUR + 3; k++) {
+    r = await get("/login/email", { method: "POST", headers: { Origin: BASE, "CF-Connecting-IP": `198.51.100.${k}` } });
+    if (r.status !== 200) break;
+  }
+  const linkBody = await r.json().catch(() => ({}));
+  check(r.status === 429 && linkBody.limit === "hour" && k === LINKS_PER_HOUR && outbox.length === LINKS_PER_HOUR && outbox.every((m) => JSON.stringify(m.to) === JSON.stringify([OWNER])),
+    `login link ${LINKS_PER_HOUR + 1} in an hour, even from fresh connections -> 429, nothing sent (got ${r.status} after ${k} sends; ${outbox.length} emails)`);
   r = await get("/upload", { method: "POST", headers: { Cookie: AUTH.Cookie }, body: form(slot, img, "image/png") });
-  check(r.status === 403, `a paired cookie without a same-site Origin -> 403 (got ${r.status})`);
+  check(r.status === 403, `a session cookie without a same-site Origin -> 403 (got ${r.status})`);
   r = await get("/upload", { method: "POST", headers: AUTH, body: form(slot, Buffer.from("hello"), "text/plain", "t.txt") });
   check(r.status === 415, `POST a text file -> 415 (got ${r.status})`);
   r = await get("/upload", { method: "POST", headers: AUTH, body: form(slot, Buffer.alloc(10 * 1024 * 1024 + 1), "image/jpeg", "big.jpg") });
@@ -134,7 +168,7 @@ try {
   check(r.status === 302, "other slots are untouched");
 
   r = await get(`/upload?slot=${slot}`, { method: "DELETE", headers: { Origin: BASE } });
-  check(r.status === 401, `DELETE with Origin but no device cookie -> 401 (got ${r.status})`);
+  check(r.status === 401, `DELETE with Origin but no session cookie -> 401 (got ${r.status})`);
   r = await get(`/upload?slot=${slot}`, { method: "DELETE", headers: AUTH });
   check(r.status === 200, `DELETE /upload?slot=${slot} -> 200 (got ${r.status})`);
   r = await get(`/photos/${slot}`);
@@ -205,7 +239,7 @@ try {
   const orig = originalCopy(staticHtml);
   const jsonPost = (body, headers = AUTH) => get("/bio", { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify(body) });
   r = await jsonPost({ bio: "x" }, { Origin: BASE });
-  check(r.status === 401, `POST /bio with a forged Origin and no device cookie -> 401 (got ${r.status})`);
+  check(r.status === 401, `POST /bio with a forged Origin and no session cookie -> 401 (got ${r.status})`);
   const tricky = "<script>alert('x')</script> & friends 💄\r\n\r\n\r\n  Second <b>para</b> — hi@example.com  \n\nThird";
   r = await jsonPost({ bio: tricky, tagline: "Beauty <i> · Brooklyn" });
   check(r.status === 200, `POST /bio with tricky input -> 200 (got ${r.status})`);
@@ -250,6 +284,7 @@ try {
   check(false, e.message);
 } finally {
   dev.kill("SIGTERM");
+  mock.close();
   await rm(persist, { recursive: true, force: true });
 }
 

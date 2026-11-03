@@ -2,6 +2,11 @@ name = "justbeingmercedes"
 compatibility_date = "2026-09-25"
 pages_build_output_dir = "public"
 
+# Login links are emailed from her own domain (verified in the Resend account whose key is the
+# RESEND_API_KEY Pages secret; vault RESEND_SHEILA_API_KEY). The recipient is the OWNER_EMAIL secret.
+[vars]
+EMAIL_FROM = "justbeingmercedes.com <studio@justbeingmercedes.com>"
+
 # Uploaded replacement photos, their descriptions and the bio (see functions/). Production keys are
 # `hero`, `photo-1` .. `photo-5`, `og-hero`, `site.json`, `ratelimit/*`.
 [[r2_buckets]]
@@ -12,6 +17,7 @@ bucket_name = "justbeingmercedes-photos"
 # never changes what justbeingmercedes.com shows. (Preview bindings must be restated in full here.)
 [env.preview.vars]
 STORE_PREFIX = "preview/"
+EMAIL_FROM = "justbeingmercedes.com <studio@justbeingmercedes.com>"
 
 [[env.preview.r2_buckets]]
 binding = "PHOTOS"

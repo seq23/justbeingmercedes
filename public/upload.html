@@ -48,6 +48,7 @@
   .bio-card textarea { min-height: 11rem; resize: vertical; }
   .count { margin: 0; font-size: .8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
   .count.over { color: #a3321f; }
+  [hidden] { display: none !important; }
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .status.err { color: #f08a74; } }
 </style>
@@ -58,6 +59,12 @@
     <h1>Change your page</h1>
     <p class="lede">Change your bio or any photo here. Changes show on <a href="/">justbeingmercedes.com</a> within a minute or two. "Back to original" puts back what was there first. Photos are shrunk on your phone before they are sent, so large ones are fine.</p>
   </header>
+  <section class="bio-card" id="login-card" hidden aria-labelledby="login-h">
+    <h2 id="login-h">Sign in to make changes</h2>
+    <p class="hint">We email you a link. Open it on this phone and tap Sign in. You stay signed in for 90 days.</p>
+    <div class="actions"><button type="button" class="upload" id="login-send">Email me a login link</button></div>
+    <p class="status" id="login-status" role="status" aria-live="polite"></p>
+  </section>
   <section class="bio-card" id="bio-card" aria-labelledby="bio-h">
     <h2 id="bio-h">Your bio</h2>
     <label for="tagline">Short line above your name <span class="hint">(parts separated by ·)</span></label>
@@ -294,7 +301,19 @@
   }
   load().then(() => {
     fillBio(); cards.forEach((c) => refresh(c)); counts();
-    if (state && state.paired === false) say(bioStatus, "This phone is not set up to make changes yet. Open the set-up link you were sent first.", "err");
+    if (state && state.signedIn === false) document.getElementById("login-card").hidden = false;
+  });
+  const loginSend = document.getElementById("login-send");
+  const loginStatus = document.getElementById("login-status");
+  loginSend.addEventListener("click", async () => {
+    loginSend.disabled = true; say(loginStatus, "Sending…");
+    try {
+      const r = await fetch("/login/email", { method: "POST" });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || `That did not work (${r.status}).`);
+      say(loginStatus, j.message, "ok");
+    } catch (e) { say(loginStatus, e.message, "err"); }
+    setTimeout(() => { loginSend.disabled = false; }, 30_000);
   });
 })();
 </script>
