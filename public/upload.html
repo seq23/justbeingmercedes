@@ -292,7 +292,10 @@
       await load(); refresh(card);
     });
   }
-  load().then(() => { fillBio(); cards.forEach((c) => refresh(c)); counts(); });
+  load().then(() => {
+    fillBio(); cards.forEach((c) => refresh(c)); counts();
+    if (state && state.paired === false) say(bioStatus, "This phone is not set up to make changes yet. Open the set-up link you were sent first.", "err");
+  });
 })();
 </script>
 </body>

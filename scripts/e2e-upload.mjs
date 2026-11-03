@@ -9,11 +9,16 @@ import { deflateSync, crc32 } from "node:zlib";
 import { readFile } from "node:fs/promises";
 import { SLOTS } from "../functions/_lib/slots.js";
 import { FALLBACK_ALT, originalCopy } from "../functions/_lib/store.js";
+import { COOKIE, mintPairing } from "../functions/_lib/device.js";
+import { WRITES_PER_HOUR } from "../functions/_lib/guard.js";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const PORT = 8700 + Math.floor(Math.random() * 200);
 const BASE = `http://127.0.0.1:${PORT}`;
-const ORIGIN = { Origin: BASE };
+// A paired device's write: same-site Origin + the device cookie (filled in by the pairing step below).
+const AUTH = { Origin: BASE };
+const SECRET = "e2e-device-secret";
+const DAY_CAP = 40; // passed as WRITES_PER_DAY so the whole-site cap is reachable in a test
 let checks = 0;
 const failures = [];
 const check = (ok, msg) => { checks++; if (!ok) failures.push(msg); console.log(`  ${ok ? "ok  " : "FAIL"} ${msg}`); };
@@ -33,10 +38,10 @@ function png() {
 const form = (slot, bytes, type, name = "t.png") => {
   const f = new FormData(); f.append("slot", slot); f.append("file", new Blob([bytes], { type }), name); return f;
 };
-// Every request carrying the same-site Origin passes the origin check and counts toward the hourly limit.
+// Every request carrying the device cookie and the same-site Origin is an accepted write and counts toward the limits.
 let writes = 0;
 const get = (path, init = {}) => {
-  if (init.headers?.Origin) writes++;
+  if (init.headers?.Origin && AUTH.Cookie && init.headers.Cookie === AUTH.Cookie) writes++;
   return fetch(BASE + path, { redirect: "manual", ...init });
 };
 const decode = (s) => s.replace(/&(amp|lt|gt|quot|#39);/g, (_, e) => ({ amp: "&", lt: "<", gt: ">", quot: '"', "#39": "'" })[e]);
@@ -52,7 +57,8 @@ const tileRe = (slot) => new RegExp(`<img src="/photos/${slot}\\?size=thumb[^"]*
 const fullRe = (slot) => new RegExp(`<img class="lb-full" src="/photos/${slot}(\\?[^"]*)?"[^>]*>`);
 
 const persist = await mkdtemp(join(tmpdir(), "jbm-r2-"));
-const dev = spawn("npx", ["wrangler", "pages", "dev", "public", "--ip", "127.0.0.1", "--port", String(PORT), "--persist-to", persist],
+const dev = spawn("npx", ["wrangler", "pages", "dev", "public", "--ip", "127.0.0.1", "--port", String(PORT), "--persist-to", persist,
+  "--binding", `DEVICE_SECRET=${SECRET}`, "--binding", `WRITES_PER_DAY=${DAY_CAP}`],
   { cwd: ROOT, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, WRANGLER_SEND_METRICS: "false", CI: "true" } });
 let log = "";
 dev.stdout.on("data", (d) => (log += d)); dev.stderr.on("data", (d) => (log += d));
@@ -77,17 +83,45 @@ try {
   check(r.status === 200 && /Change your page[\s\S]*Your bio[\s\S]*Describe this photo/.test(await r.text()), "GET /upload serves the page with the bio card and photo descriptions");
 
   const img = png();
+  // ---- Device pairing: no write without the year-long device cookie ----
   r = await get("/upload", { method: "POST", body: form(slot, img, "image/png") });
-  check(r.status === 403, `POST without a same-site Origin -> 403 (got ${r.status})`);
-  r = await get("/upload", { method: "POST", headers: ORIGIN, body: form(slot, Buffer.from("hello"), "text/plain", "t.txt") });
+  check(r.status === 401, `POST with no device cookie -> 401 (got ${r.status})`);
+  r = await get("/upload", { method: "POST", headers: { Origin: BASE }, body: form(slot, img, "image/png") });
+  check(r.status === 401, `POST with a forged same-site Origin alone -> 401 (got ${r.status})`);
+  r = await get("/bio", { method: "DELETE", headers: { Origin: BASE, Cookie: `${COOKIE}=d1.AAAAAAAAAAAAAAAAAAAAAAAA.99999999999999.AAAA` } });
+  check(r.status === 401, `DELETE /bio with a made-up device cookie -> 401 (got ${r.status})`);
+  check((await (await get("/content")).json()).paired === false, "GET /content says this browser is not paired");
+  r = await get("/pair?t=p1.AAAAAAAAAAAAAAAAAAAAAAAA.99999999999999.AAAA");
+  check(r.status === 410, `a forged pairing link -> 410 (got ${r.status})`);
+  r = await get(`/pair?t=${await mintPairing("not-the-secret")}`);
+  check(r.status === 410, `a pairing link signed with another key -> 410 (got ${r.status})`);
+  r = await get(`/pair?t=${await mintPairing(SECRET, Date.now() - 31 * 86_400_000)}`);
+  check(r.status === 410, `an expired pairing link -> 410 (got ${r.status})`);
+  const pairToken = await mintPairing(SECRET);
+  r = await get(`/pair?t=${pairToken}`);
+  check(r.status === 200 && !r.headers.get("set-cookie") && /<form method="post" action="\/pair">/.test(await r.text()), "GET /pair shows the Pair button and sets no cookie (link previews cannot use it up)");
+  r = await get(`/pair?t=${pairToken}`);
+  check(r.status === 200, `GET /pair twice still works (got ${r.status})`);
+  const pairForm = () => { const f = new FormData(); f.append("t", pairToken); return f; };
+  r = await get("/pair", { method: "POST", body: pairForm() });
+  const setCookie = r.headers.get("set-cookie") || "";
+  check(r.status === 303 && r.headers.get("location") === "/upload", `POST /pair -> 303 /upload (got ${r.status} ${r.headers.get("location")})`);
+  check(/HttpOnly/.test(setCookie) && /Secure/.test(setCookie) && /SameSite=Strict/.test(setCookie) && /Max-Age=31536000/.test(setCookie), `the device cookie is HttpOnly, Secure, SameSite=Strict, one year (${setCookie.replace(/=d1\.[^;]+/, "=…")})`);
+  AUTH.Cookie = setCookie.split(";")[0];
+  r = await get("/pair", { method: "POST", body: pairForm() });
+  check(r.status === 410 && !r.headers.get("set-cookie"), `the same pairing link a second time -> 410, no cookie (got ${r.status})`);
+  check((await (await get("/content", { headers: { Cookie: AUTH.Cookie } })).json()).paired === true, "GET /content says the paired browser is paired");
+  r = await get("/upload", { method: "POST", headers: { Cookie: AUTH.Cookie }, body: form(slot, img, "image/png") });
+  check(r.status === 403, `a paired cookie without a same-site Origin -> 403 (got ${r.status})`);
+  r = await get("/upload", { method: "POST", headers: AUTH, body: form(slot, Buffer.from("hello"), "text/plain", "t.txt") });
   check(r.status === 415, `POST a text file -> 415 (got ${r.status})`);
-  r = await get("/upload", { method: "POST", headers: ORIGIN, body: form(slot, Buffer.alloc(10 * 1024 * 1024 + 1), "image/jpeg", "big.jpg") });
+  r = await get("/upload", { method: "POST", headers: AUTH, body: form(slot, Buffer.alloc(10 * 1024 * 1024 + 1), "image/jpeg", "big.jpg") });
   const big = await r.json().catch(() => ({}));
   check(r.status === 413 && /10 MB/.test(big.error || ""), `POST over 10 MB -> 413 with a plain sentence (got ${r.status}: ${big.error})`);
-  r = await get("/upload", { method: "POST", headers: ORIGIN, body: form("not-a-slot", img, "image/png") });
+  r = await get("/upload", { method: "POST", headers: AUTH, body: form("not-a-slot", img, "image/png") });
   check(r.status === 400, `POST to an unknown slot -> 400 (got ${r.status})`);
 
-  r = await get("/upload", { method: "POST", headers: ORIGIN, body: form(slot, img, "image/png") });
+  r = await get("/upload", { method: "POST", headers: AUTH, body: form(slot, img, "image/png") });
   const up = await r.json().catch(() => ({}));
   check(r.status === 200 && up.ok === true && up.slot === slot, `POST a PNG to ${slot} -> 200 ok (got ${r.status} ${JSON.stringify(up)})`);
   r = await get(`/photos/${slot}`);
@@ -99,9 +133,9 @@ try {
   r = await get("/photos/photo-1");
   check(r.status === 302, "other slots are untouched");
 
-  r = await get(`/upload?slot=${slot}`, { method: "DELETE" });
-  check(r.status === 403, `DELETE without a same-site Origin -> 403 (got ${r.status})`);
-  r = await get(`/upload?slot=${slot}`, { method: "DELETE", headers: ORIGIN });
+  r = await get(`/upload?slot=${slot}`, { method: "DELETE", headers: { Origin: BASE } });
+  check(r.status === 401, `DELETE with Origin but no device cookie -> 401 (got ${r.status})`);
+  r = await get(`/upload?slot=${slot}`, { method: "DELETE", headers: AUTH });
   check(r.status === 200, `DELETE /upload?slot=${slot} -> 200 (got ${r.status})`);
   r = await get(`/photos/${slot}`);
   check(r.status === 302 && r.headers.get("location") === SLOTS[slot].full, `after DELETE, /photos/${slot} is back to the 302 fallback`);
@@ -115,7 +149,7 @@ try {
   check(p.img(fullRe(slot)).alt === origAlt(slot) && origAlt(slot).length > 20, `${slot} shows its original alt while the original photo is in place`);
   const desc = 'Mercedes in a red dress & "big" hat <b>, Tom &amp; Jerry';
   const withAlt = form(slot, img, "image/png"); withAlt.append("alt", desc + "\n");
-  r = await get("/upload", { method: "POST", headers: ORIGIN, body: withAlt });
+  r = await get("/upload", { method: "POST", headers: AUTH, body: withAlt });
   check(r.status === 200, `upload with a description -> 200 (got ${r.status})`);
   p = await page();
   const tileImg = p.img(tileRe(slot)), fullImg = p.img(fullRe(slot));
@@ -126,20 +160,20 @@ try {
   check(p.img(fullRe("photo-1")).alt === origAlt("photo-1") && /<figcaption>/.test(p.lb(SLOTS["photo-1"].lightbox)), "untouched photos keep their original alt and caption");
   check(!/<script/i.test(p.html) && p.html.includes("<!--email_off-->") && p.html.includes('href="mailto:mercasare.social@gmail.com?subject='), "rendered page: still no script, mailto untouched inside email_off");
   const altOnly = new FormData(); altOnly.append("slot", slot); altOnly.append("alt", "Mercedes on a rooftop");
-  r = await get("/upload", { method: "POST", headers: ORIGIN, body: altOnly });
+  r = await get("/upload", { method: "POST", headers: AUTH, body: altOnly });
   check(r.status === 200 && (await page()).img(fullRe(slot)).alt === "Mercedes on a rooftop", "a description alone updates the replaced photo's alt");
-  r = await get("/upload", { method: "POST", headers: ORIGIN, body: form(slot, img, "image/png") });
+  r = await get("/upload", { method: "POST", headers: AUTH, body: form(slot, img, "image/png") });
   p = await page();
   check(r.status === 200 && p.img(fullRe(slot)).alt === FALLBACK_ALT && p.img(tileRe(slot)).alt === FALLBACK_ALT, `replaced without a description -> "${FALLBACK_ALT}" (got "${p.img(fullRe(slot)).alt}")`);
   const altOrig = new FormData(); altOrig.append("slot", "photo-1"); altOrig.append("alt", "x");
-  r = await get("/upload", { method: "POST", headers: ORIGIN, body: altOrig });
+  r = await get("/upload", { method: "POST", headers: AUTH, body: altOrig });
   check(r.status === 400, `a description for a photo still original -> 400 (got ${r.status})`);
   const longAlt = form(slot, img, "image/png"); longAlt.append("alt", "x".repeat(301));
-  r = await get("/upload", { method: "POST", headers: ORIGIN, body: longAlt });
+  r = await get("/upload", { method: "POST", headers: AUTH, body: longAlt });
   check(r.status === 400, `a description over 300 characters -> 400 (got ${r.status})`);
   let c = await (await get("/content")).json();
   check(c.slots?.[slot]?.custom === true && c.slots?.["photo-1"]?.custom === false, "GET /content reports which photos are replaced");
-  r = await get(`/upload?slot=${slot}`, { method: "DELETE", headers: ORIGIN });
+  r = await get(`/upload?slot=${slot}`, { method: "DELETE", headers: AUTH });
   p = await page();
   check(r.status === 200 && p.img(fullRe(slot)).alt === origAlt(slot) && p.img(fullRe(slot)).src === `/photos/${slot}` && /<figcaption>/.test(p.lb(lbId)), "Back to original restores the original alt, src and caption");
 
@@ -147,7 +181,7 @@ try {
   const jpeg = await readFile(join(ROOT, "public", "assets", "selfie.jpg"));
   check(p.meta("og:image") === "https://justbeingmercedes.com/assets/selfie.jpg", `og:image is the original while the original hero is up (${p.meta("og:image")})`);
   const heroUp = form("hero", img, "image/png"); heroUp.append("share", new Blob([jpeg], { type: "image/jpeg" }), "share.jpg"); heroUp.append("alt", "Mercedes at the Met");
-  r = await get("/upload", { method: "POST", headers: ORIGIN, body: heroUp });
+  r = await get("/upload", { method: "POST", headers: AUTH, body: heroUp });
   p = await page();
   const og = p.meta("og:image") || "";
   check(r.status === 200 && og.startsWith(`${BASE}/og-image.jpg?v=`), `new hero -> og:image is the JPEG rendition (${og})`);
@@ -157,11 +191,11 @@ try {
   r = await get(og.slice(BASE.length));
   const ogBytes = Buffer.from(await r.arrayBuffer());
   check(r.status === 200 && r.headers.get("content-type") === "image/jpeg" && ogBytes.equals(jpeg) && /max-age=300/.test(r.headers.get("cache-control") || ""), "og:image URL serves that JPEG, cacheable 5 minutes");
-  r = await get("/upload", { method: "POST", headers: ORIGIN, body: form("hero", img, "image/png") });
+  r = await get("/upload", { method: "POST", headers: AUTH, body: form("hero", img, "image/png") });
   p = await page();
   check(r.status === 200 && (p.meta("og:image") || "").startsWith(`${BASE}/photos/hero?v=`) && p.meta("og:image:width") === null && p.meta("og:image:alt") === FALLBACK_ALT,
     `a hero with no JPEG rendition -> og:image is /photos/hero with no stale size (${p.meta("og:image")}, w=${p.meta("og:image:width")})`);
-  r = await get("/upload?slot=hero", { method: "DELETE", headers: ORIGIN });
+  r = await get("/upload?slot=hero", { method: "DELETE", headers: AUTH });
   p = await page();
   check(r.status === 200 && p.meta("og:image") === "https://justbeingmercedes.com/assets/selfie.jpg" && p.meta("og:image:width") === "1077", "Back to original restores og:image and its size");
   r = await get("/og-image.jpg");
@@ -169,9 +203,9 @@ try {
 
   // ---- Bio ----
   const orig = originalCopy(staticHtml);
-  const jsonPost = (body, headers = ORIGIN) => get("/bio", { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  r = await jsonPost({ bio: "x" }, {});
-  check(r.status === 403, `POST /bio without a same-site Origin -> 403 (got ${r.status})`);
+  const jsonPost = (body, headers = AUTH) => get("/bio", { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  r = await jsonPost({ bio: "x" }, { Origin: BASE });
+  check(r.status === 401, `POST /bio with a forged Origin and no device cookie -> 401 (got ${r.status})`);
   const tricky = "<script>alert('x')</script> & friends 💄\r\n\r\n\r\n  Second <b>para</b> — hi@example.com  \n\nThird";
   r = await jsonPost({ bio: tricky, tagline: "Beauty <i> · Brooklyn" });
   check(r.status === 200, `POST /bio with tricky input -> 200 (got ${r.status})`);
@@ -189,18 +223,29 @@ try {
   check(r.status === 400, `an empty bio -> 400 (got ${r.status})`);
   c = await (await get("/content")).json();
   check(c.bio?.custom === true && c.bio.original?.text === orig.text && c.bio.text.startsWith("<script>"), "GET /content returns her saved bio and the original");
-  r = await get("/bio", { method: "DELETE", headers: ORIGIN });
+  r = await get("/bio", { method: "DELETE", headers: AUTH });
   p = await page();
   check(r.status === 200 && p.r.headers.get("x-site-content") === "original" && p.html === staticHtml, "Back to original bio -> the static page byte for byte");
 
   // Per-IP limit: 30 accepted writes an hour, then 429.
   let n = 0;
   for (; n < 40; n++) {
-    r = await get(`/upload?slot=${slot}`, { method: "DELETE", headers: ORIGIN });
+    r = await get(`/upload?slot=${slot}`, { method: "DELETE", headers: AUTH });
     if (r.status === 429) break;
   }
   const before = writes - n - 1;
-  check(r.status === 429 && before + n === 30, `the 31st write in an hour gets 429 (${before} guarded writes above + ${n} more before the 429; want 30)`);
+  const hourBody = await r.json().catch(() => ({}));
+  check(r.status === 429 && hourBody.limit === "hour" && before + n === WRITES_PER_HOUR, `the 31st write in an hour gets 429 (${before} guarded writes above + ${n} more before the 429; want ${WRITES_PER_HOUR})`);
+
+  // Whole-site daily cap: other connections may write until the site has taken DAY_CAP writes today.
+  let accepted = WRITES_PER_HOUR, m = 0;
+  for (; m < DAY_CAP; m++) {
+    r = await get(`/upload?slot=${slot}`, { method: "DELETE", headers: { ...AUTH, "CF-Connecting-IP": `203.0.113.${m + 1}` } });
+    if (r.status !== 200) break;
+    accepted++;
+  }
+  const dayBody = await r.json().catch(() => ({}));
+  check(r.status === 429 && dayBody.limit === "day" && accepted === DAY_CAP, `write ${DAY_CAP + 1} of the day, from a fresh connection, gets 429 limit=day (got ${r.status} ${dayBody.limit} after ${accepted} accepted)`);
 } catch (e) {
   check(false, e.message);
 } finally {
