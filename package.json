@@ -9,7 +9,8 @@
     "test": "node scripts/e2e-upload.mjs",
     "validate:static": "node scripts/validate.mjs --static",
     "validate:workflows": "node scripts/validate-workflows.mjs && node scripts/validate-workflows.mjs --self-test",
-    "validate:gate": "node scripts/production-gate.mjs --self-test"
+    "validate:gate": "node scripts/production-gate.mjs --self-test",
+    "pairing-url": "node scripts/pairing-url.mjs"
   },
   "devDependencies": {
     "playwright": "^1.55.0",
